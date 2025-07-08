@@ -789,6 +789,11 @@ if __name__ == "__main__":
     if args.command == "train":
         import ast
         train_val_test_split = ast.literal_eval(args.train_val_test_split)
+        # Save arguments to save_dir/args.json
+        import json, os
+        os.makedirs(args.save_dir, exist_ok=True)
+        with open(os.path.join(args.save_dir, "args.json"), "w") as f:
+            json.dump(vars(args), f, indent=2)
         # Convert use_patches string to boolean
         if isinstance(args.use_patches, str):
             if args.use_patches.lower() in ["true", "1", "yes"]:
@@ -837,6 +842,13 @@ if __name__ == "__main__":
             early_stopping_patience=args.early_stopping_patience,
         )
     elif args.command == "test":
+        import ast
+        train_val_test_split = ast.literal_eval(args.train_val_test_split)
+        # Save arguments to run_dir/args.json
+        import json, os
+        os.makedirs(args.run_dir, exist_ok=True)
+        with open(os.path.join(args.run_dir, "args.json"), "w") as f:
+            json.dump(vars(args), f, indent=2)
         hidden_channels = parse_int_list(args.hidden_channels)
         kernel_size = parse_int_list(args.kernel_size)
         L = parse_int_list(args.L)
@@ -857,7 +869,7 @@ if __name__ == "__main__":
             run_dir=args.run_dir,
             seq_len_in=args.seq_len_in,
             seq_len_out=args.seq_len_out,
-            train_val_test_split=parse_int_list(args.train_val_test_split),
+            train_val_test_split=train_val_test_split,
             batch_size=args.batch_size,
             hidden_channels=hidden_channels,
             kernel_size=kernel_size,
