@@ -1,0 +1,4 @@
+Data/
+runs/
+wandb/
+#convLSTM_pytorch.ipynb
