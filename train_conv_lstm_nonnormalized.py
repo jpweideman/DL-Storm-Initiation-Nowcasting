@@ -107,7 +107,7 @@ def train_radar_model(
     *,
     seq_len_in: int = 10,
     seq_len_out: int = 1,
-    train_frac: float = 0.8,
+    train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
     lr: float = 2e-4,
     hidden_dims: tuple = (64,64),
@@ -133,8 +133,8 @@ def train_radar_model(
         Number of input time steps (default: 10).
     seq_len_out : int, optional
         Number of output time steps to predict (default: 1).
-    train_frac : float, optional
-        Fraction of the data to use for training; the remainder is used for validation (default: 0.8).
+    train_val_test_split : tuple, optional
+        Tuple/list of three floats (train, val, test) that sum to 1.0 (default: (0.7, 0.15, 0.15)).
     batch_size : int, optional
         Batch size for training (default: 4).
     lr : float, optional
@@ -162,7 +162,12 @@ def train_radar_model(
     -------
     None
     """
-        
+    if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
+        raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
+    if not abs(sum(train_val_test_split) - 1.0) < 1e-6:
+        raise ValueError(f"train_val_test_split must sum to 1.0, got {train_val_test_split} (sum={sum(train_val_test_split)})")
+    train_frac, val_frac, _ = train_val_test_split
+
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -176,11 +181,14 @@ def train_radar_model(
     # chronological split
     n_total = T - seq_len_in - seq_len_out + 1
     n_train = int(n_total * train_frac)
+    n_val = int(n_total * val_frac)
+    idx_train = list(range(0, n_train))
+    idx_val = list(range(n_train, n_train + n_val))
 
     # DataLoaders
     full_ds  = RadarWindowDataset(cube, seq_len_in, seq_len_out)
-    train_ds = Subset(full_ds, list(range(0, n_train)))
-    val_ds   = Subset(full_ds, list(range(n_train, n_total)))
+    train_ds = Subset(full_ds, idx_train)
+    val_ds   = Subset(full_ds, idx_val)
     train_dl = DataLoader(train_ds, batch_size, shuffle=False)
     val_dl   = DataLoader(val_ds,   batch_size, shuffle=False)
     print(f"Samples  train={len(train_ds)}  val={len(val_ds)}")
@@ -307,13 +315,13 @@ def compute_mse_by_ranges(pred, target, ranges):
             mse_by_range[f"mse_{r_min}_{r_max}"] = np.nan
     return mse_by_range
 
-def predict_validation_set(
+def predict_test_set(
     npy_path: str,
     run_dir:  str,
     *,
     seq_len_in: int = 10,
     seq_len_out: int = 1,
-    train_frac: float = 0.8,
+    train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
     hidden_dims: tuple = (64,64),
     kernel_size: int = 3,
@@ -322,7 +330,7 @@ def predict_validation_set(
     save_arrays: bool = True
 ):
     """
-    Run inference on the validation set using a ConvLSTM model from train_radar_model.
+    Run inference on the test set using a ConvLSTM model from train_radar_model.
 
     Parameters
     ----------
@@ -334,8 +342,8 @@ def predict_validation_set(
         Number of input time steps (default: 10).
     seq_len_out : int, optional
         Number of output time steps to predict (default: 1).
-    train_frac : float, optional
-        Fraction of data used for training split (default: 0.8).
+    train_val_test_split : tuple, optional
+        Tuple/list of three floats (train, val, test) that sum to 1.0 (default: (0.7, 0.15, 0.15)).
     batch_size : int, optional
         Batch size for inference (default: 4).
     hidden_dims : list or tuple of int, optional
@@ -363,12 +371,19 @@ def predict_validation_set(
 
     cube = np.load(npy_path); cube[cube<0]=0
 
-    T       = cube.shape[0]
-    n_tot   = T - seq_len_in - seq_len_out + 1
-    n_train = int(n_tot * train_frac)
+    T, C, H, W = cube.shape
+    if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
+        raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
+    if not abs(sum(train_val_test_split) - 1.0) < 1e-6:
+        raise ValueError(f"train_val_test_split must sum to 1.0, got {train_val_test_split} (sum={sum(train_val_test_split)})")
+    train_frac, val_frac, test_frac = train_val_test_split
+    n_total = T - seq_len_in - seq_len_out + 1
+    n_train = int(n_total * train_frac)
+    n_val = int(n_total * val_frac)
+    idx_test = list(range(n_train + n_val, n_total))
     ds      = RadarWindowDataset(cube, seq_len_in, seq_len_out)
-    val_ds  = Subset(ds, list(range(n_train, n_tot)))
-    dl      = DataLoader(val_ds, batch_size, shuffle=False)
+    test_ds  = Subset(ds, idx_test)
+    dl      = DataLoader(test_ds, batch_size, shuffle=False)
 
     model = ConvLSTM(in_ch=cube.shape[1], hidden_dims=hidden_dims, kernel=kernel_size)
     st = torch.load(ckpt, map_location=device)
@@ -399,9 +414,9 @@ def predict_validation_set(
         print(f"{range_name}: {mse:.4f}")
     
     if save_arrays:
-        np.save(run_dir/"val_preds_dBZ.npy",   pred_all)
-        np.save(run_dir/"val_targets_dBZ.npy", tgt_all)
-        print("Saved val_preds_dBZ.npy + val_targets_dBZ.npy →", run_dir)
+        np.save(run_dir/"test_preds_dBZ.npy",   pred_all)
+        np.save(run_dir/"test_targets_dBZ.npy", tgt_all)
+        print("Saved test_preds_dBZ.npy + test_targets_dBZ.npy →", run_dir)
 
     return pred_all, tgt_all
 
@@ -410,26 +425,44 @@ def predict_validation_set(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train ConvLSTM radar forecasting model without normalization")
-    parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
-    parser.add_argument("--hidden_dims", type=str, required=True, help="Hidden dimensions as tuple, e.g., (64, 64)")
-    parser.add_argument("--kernel_size", type=int, required=True, help="Kernel size (must be odd number)")
+    subparsers = parser.add_subparsers(dest="command")
+
+    # Subparser for training
+    train_parser = subparsers.add_parser("train", help="Train ConvLSTM radar forecasting model")
+    train_parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
+    train_parser.add_argument("--hidden_dims", type=str, required=True, help="Hidden dimensions as tuple, e.g., (64, 64)")
+    train_parser.add_argument("--kernel_size", type=int, required=True, help="Kernel size (must be odd number)")
 
     # Optional arguments
-    parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
-    parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
-    parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
-    parser.add_argument("--train_frac", type=float, default=0.6, help="Training fraction (default: 0.8)")
-    parser.add_argument("--batch_size", type=int, default=1, help="Batch size (default: 4)")
-    parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 2e-4)")
-    parser.add_argument("--epochs", type=int, default=15, help="Number of epochs (default: 15)")
-    parser.add_argument("--device", type=str, default='cuda', help="Device to train on ('cuda' or 'cpu')")
-    parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse or weighted_mse")
-    parser.add_argument("--loss_weight_thresh", type=float, default=40.0,
+    train_parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
+    train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
+    train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
+    train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
+    train_parser.add_argument("--batch_size", type=int, default=1, help="Batch size (default: 4)")
+    train_parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 2e-4)")
+    train_parser.add_argument("--epochs", type=int, default=15, help="Number of epochs (default: 15)")
+    train_parser.add_argument("--device", type=str, default='cuda', help="Device to train on ('cuda' or 'cpu')")
+    train_parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse or weighted_mse")
+    train_parser.add_argument("--loss_weight_thresh", type=float, default=40.0,
                     help="Threshold in dBZ to apply higher loss weighting (default: 40.0)")
-    parser.add_argument("--loss_weight_high", type=float, default=10.0,
+    train_parser.add_argument("--loss_weight_high", type=float, default=10.0,
                         help="Weight multiplier for pixels above threshold (default: 10.0)")
-    parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
-    parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")
+    train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
+    train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")
+
+    # Subparser for test
+    test_parser = subparsers.add_parser("test", help="Run test and compute MSE by reflectivity range")
+    test_parser.add_argument("--npy_path", type=str, required=True, help="Path to input .npy radar file")
+    test_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
+    test_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
+    test_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
+    test_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
+    test_parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
+    test_parser.add_argument("--hidden_dims", type=str, default="(64,64)", help="Hidden dimensions as tuple, e.g., (64, 64)")
+    test_parser.add_argument("--kernel_size", type=int, default=3, help="Kernel size (default: 3)")
+    test_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
+    test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
+    test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
 
     args = parser.parse_args()
 
@@ -444,21 +477,37 @@ if __name__ == "__main__":
     if args.kernel_size % 2 == 0:
         raise ValueError("kernel_size must be an odd integer.")
 
-    train_radar_model(
-        npy_path=args.npy_path,
-        save_dir=args.save_dir,
-        seq_len_in=args.seq_len_in,
-        seq_len_out=args.seq_len_out,
-        train_frac=args.train_frac,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        hidden_dims=hidden_dims,
-        kernel_size=args.kernel_size,
-        epochs=args.epochs,
-        device=args.device,
-        loss_name=args.loss_name,
-        loss_weight_thresh=args.loss_weight_thresh,
-        loss_weight_high=args.loss_weight_high,
-        wandb_project=args.wandb_project,
-        early_stopping_patience=args.early_stopping_patience,
-    )
+    train_val_test_split = ast.literal_eval(args.train_val_test_split)
+    if args.command == "train":
+        train_radar_model(
+            npy_path=args.npy_path,
+            save_dir=args.save_dir,
+            seq_len_in=args.seq_len_in,
+            seq_len_out=args.seq_len_out,
+            train_val_test_split=train_val_test_split,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            hidden_dims=hidden_dims,
+            kernel_size=args.kernel_size,
+            epochs=args.epochs,
+            device=args.device,
+            loss_name=args.loss_name,
+            loss_weight_thresh=args.loss_weight_thresh,
+            loss_weight_high=args.loss_weight_high,
+            wandb_project=args.wandb_project,
+            early_stopping_patience=args.early_stopping_patience,
+        )
+    elif args.command == "test":
+        predict_test_set(
+            npy_path=args.npy_path,
+            run_dir=args.run_dir,
+            seq_len_in=args.seq_len_in,
+            seq_len_out=args.seq_len_out,
+            train_val_test_split=train_val_test_split,
+            batch_size=args.batch_size,
+            hidden_dims=hidden_dims,
+            kernel_size=args.kernel_size,
+            which=args.which,
+            device=args.device,
+            save_arrays=args.save_arrays,
+        )

@@ -203,7 +203,7 @@ def train_radar_model(
     *,
     seq_len_in: int = 10,
     seq_len_out: int = 1,
-    train_frac: float = 0.8,
+    train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
     lr: float = 2e-4,
     d_model: int = 128,
@@ -240,8 +240,8 @@ def train_radar_model(
         Number of input time steps (default: 10).
     seq_len_out : int, optional
         Number of output time steps to predict (default: 1).
-    train_frac : float, optional
-        Fraction of the data to use for training; the remainder is used for validation (default: 0.8).
+    train_val_test_split : tuple, optional
+        Tuple/list of three floats (train, val, test) that sum to 1.0 (default: (0.7, 0.15, 0.15)).
     batch_size : int, optional
         Batch size for training (default: 4).
     lr : float, optional
@@ -291,6 +291,11 @@ def train_radar_model(
     -------
     None
     """
+    if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
+        raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
+    if not abs(sum(train_val_test_split) - 1.0) < 1e-6:
+        raise ValueError(f"train_val_test_split must sum to 1.0, got {train_val_test_split} (sum={sum(train_val_test_split)})")
+    train_frac, val_frac, _ = train_val_test_split
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -303,7 +308,11 @@ def train_radar_model(
     # chronological split & min-max
     n_total = T - seq_len_in - seq_len_out + 1
     n_train = int(n_total * train_frac)
-    n_train_plus = n_train + seq_len_in
+    n_val = int(n_total * val_frac)
+    idx_train = list(range(0, n_train))
+    idx_val = list(range(n_train, n_train + n_val))
+    idx_test = list(range(n_train + n_val, n_total))
+
     maxv = 85.0
     print(f"Normalization maxv (fixed): {maxv}")
     np.savez(save_dir/"minmax_stats.npz", maxv=maxv)
@@ -313,27 +322,20 @@ def train_radar_model(
     if use_patches:
         patch_index_path = str(save_dir / "patch_indices.npy")
         full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
-        train_idx = []
-        val_idx = []
-        n_total = T - seq_len_in - seq_len_out + 1
-        n_train = int(n_total * train_frac)
-        for i, (t, y, x) in enumerate(full_ds.patches):
-            if t < n_train:
-                train_idx.append(i)
-            else:
-                val_idx.append(i)
-        train_ds = Subset(full_ds, train_idx)
-        val_ds   = Subset(full_ds, val_idx)
+        train_ds = Subset(full_ds, idx_train)
+        val_ds   = Subset(full_ds, idx_val)
+        test_ds  = Subset(full_ds, idx_test)
         train_dl = DataLoader(train_ds, batch_size, shuffle=True)
         val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
-        print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}")
+        print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}  test={len(test_ds)}")
     else:
         full_ds  = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
-        train_ds = Subset(full_ds, list(range(0, n_train)))
-        val_ds   = Subset(full_ds, list(range(n_train, n_total)))
+        train_ds = Subset(full_ds, idx_train)
+        val_ds   = Subset(full_ds, idx_val)
+        test_ds  = Subset(full_ds, idx_test)
         train_dl = DataLoader(train_ds, batch_size, shuffle=False)
         val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
-        print(f"Samples  train={len(train_ds)}  val={len(val_ds)}")
+        print(f"Samples  train={len(train_ds)}  val={len(val_ds)}  test={len(test_ds)}")
 
     # model, optimizer, loss
     model     = FlexibleRadarTransformer(input_channels=C, seq_len_in=seq_len_in, seq_len_out=seq_len_out, d_model=d_model, nhead=nhead, num_layers=num_layers, dim_feedforward=dim_feedforward, dropout=dropout, conv_kernel=conv_kernel, conv_stride=conv_stride, conv_padding=conv_padding).to(device)
@@ -481,13 +483,13 @@ def compute_mse_by_ranges(pred, target, ranges):
     return mse_by_range
 
 
-def predict_validation_set(
+def predict_test_set(
     npy_path: str,
     run_dir:  str,
     *,
     seq_len_in: int = 10,
     seq_len_out: int = 1,
-    train_frac: float = 0.8,
+    train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
     d_model: int = 128,
     nhead: int = 4,
@@ -502,7 +504,7 @@ def predict_validation_set(
     conv_padding: int = 3,
 ):
     """
-    Run inference on the validation set using a Transformer-based radar forecasting model from train_radar_model.
+    Run inference on the test set using a Transformer-based radar forecasting model from train_radar_model.
 
     Parameters
     ----------
@@ -514,8 +516,8 @@ def predict_validation_set(
         Number of input radar frames to use for prediction (default: 10).
     seq_len_out : int, optional
         Number of future radar frames to predict (default: 1).
-    train_frac : float, optional
-        Fraction of data used for training split, used to identify validation set (default: 0.8).
+    train_val_test_split : tuple, optional
+        Tuple/list of three floats (train, val, test) that sum to 1.0 (default: (0.7, 0.15, 0.15)).
     batch_size : int, optional
         Batch size for inference (default: 4).
     d_model : int, optional
@@ -534,7 +536,7 @@ def predict_validation_set(
         Device to run inference on (default: 'cpu').
     save_arrays : bool, optional
         Whether to save predictions and targets as memory-mapped .npy files in run_dir (default: True).
-        Files will be named 'val_preds_dBZ.npy' and 'val_targets_dBZ.npy'.
+        Files will be named 'test_preds_dBZ.npy' and 'test_targets_dBZ.npy'.
     conv_kernel : int, optional
         Convolutional stem kernel size (default: 7).
     conv_stride : int, optional
@@ -560,11 +562,18 @@ def predict_validation_set(
     # Use memory-mapped loading for large datasets
     cube = np.load(npy_path, mmap_mode='r')
     T, C, H, W = cube.shape
-    n_tot   = T - seq_len_in - seq_len_out + 1
-    n_train = int(n_tot * train_frac)
+    if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
+        raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
+    if not abs(sum(train_val_test_split) - 1.0) < 1e-6:
+        raise ValueError(f"train_val_test_split must sum to 1.0, got {train_val_test_split} (sum={sum(train_val_test_split)})")
+    train_frac, val_frac, test_frac = train_val_test_split
+    n_total = T - seq_len_in - seq_len_out + 1
+    n_train = int(n_total * train_frac)
+    n_val = int(n_total * val_frac)
+    idx_test = list(range(n_train + n_val, n_total))
     ds      = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
-    val_ds  = Subset(ds, list(range(n_train, n_tot)))
-    dl      = DataLoader(val_ds, batch_size, shuffle=False)
+    test_ds  = Subset(ds, idx_test)
+    dl      = DataLoader(test_ds, batch_size, shuffle=False)
 
     model = FlexibleRadarTransformer(input_channels=C, seq_len_in=seq_len_in, seq_len_out=seq_len_out, d_model=d_model, nhead=nhead, num_layers=num_layers, dim_feedforward=dim_feedforward, dropout=dropout, conv_kernel=conv_kernel, conv_stride=conv_stride, conv_padding=conv_padding)
     st = torch.load(ckpt, map_location=device)
@@ -573,7 +582,7 @@ def predict_validation_set(
     model.load_state_dict(st)
     model.to(device).eval()
 
-    N = len(val_ds)
+    N = len(test_ds)
     # We'll determine C, H, W from the first batch
     preds_memmap = None
     gts_memmap = None
@@ -587,7 +596,7 @@ def predict_validation_set(
     # -----------------------------------------------------------
 
     with torch.no_grad():
-        for batch in tqdm(dl, desc='Validating', total=len(dl)):
+        for batch in tqdm(dl, desc='Testing', total=len(dl)):
             # Support both patch and non-patch datasets
             if isinstance(batch, (list, tuple)) and len(batch) >= 2:
                 xb, yb = batch[0], batch[1]
@@ -615,8 +624,8 @@ def predict_validation_set(
             write_count = min(batch_size, slots_left)
             # Initialize memmaps on first batch
             if preds_memmap is None and save_arrays:
-                preds_memmap = np.memmap(run_dir/"val_preds_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
-                gts_memmap   = np.memmap(run_dir/"val_targets_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
+                preds_memmap = np.memmap(run_dir/"test_preds_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
+                gts_memmap   = np.memmap(run_dir/"test_targets_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
                 assert preds_memmap.shape[0] == N, f"preds_memmap.shape[0] ({preds_memmap.shape[0]}) != N ({N})"
                 assert gts_memmap.shape[0] == N, f"gts_memmap.shape[0] ({gts_memmap.shape[0]}) != N ({N})"
             # Defensive shape check and safe writing
@@ -652,8 +661,8 @@ def predict_validation_set(
             'shape': preds_memmap.shape,
             'dtype': str(preds_memmap.dtype)
         }
-        np.savez(run_dir/"val_preds_dBZ_meta.npz", **meta)
-        np.savez(run_dir/"val_targets_dBZ_meta.npz", **meta)
+        np.savez(run_dir/"test_preds_dBZ_meta.npz", **meta)
+        np.savez(run_dir/"test_targets_dBZ_meta.npz", **meta)
 
     # Finalize MSE by range (as in other scripts)
     mse_by_range = {}
@@ -669,7 +678,7 @@ def predict_validation_set(
     for range_name, mse in mse_by_range.items():
         print(f"{range_name}: {mse:.4f}")
     if save_arrays:
-        print("Saved val_preds_dBZ.npy + val_targets_dBZ.npy →", run_dir)
+        print("Saved test_preds_dBZ.npy + test_targets_dBZ.npy →", run_dir)
     return None
 
 def atomic_save(obj, path):
@@ -687,7 +696,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
-    train_parser.add_argument("--train_frac", type=float, default=0.6, help="Training fraction (default: 0.8)")
+    train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
     train_parser.add_argument("--batch_size", type=int, default=1, help="Batch size (default: 4)")
     train_parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 2e-4)")
     train_parser.add_argument("--epochs", type=int, default=15, help="Number of epochs (default: 15)")
@@ -711,25 +720,25 @@ if __name__ == "__main__":
     train_parser.add_argument("--conv_stride", type=int, default=4, help="Convolutional stem stride (default: 4)")
     train_parser.add_argument("--conv_padding", type=int, default=3, help="Convolutional stem padding (default: 3)")
 
-    # Subparser for validation
-    val_parser = subparsers.add_parser("validate", help="Run validation and compute MSE by reflectivity range")
-    val_parser.add_argument("--npy_path", type=str, required=True, help="Path to input .npy radar file")
-    val_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
-    val_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
-    val_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
-    val_parser.add_argument("--train_frac", type=float, default=0.6, help="Training fraction (default: 0.8)")
-    val_parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
-    val_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
-    val_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
-    val_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
-    val_parser.add_argument("--d_model", type=int, default=128, help="Transformer model dimension (default: 128)")
-    val_parser.add_argument("--nhead", type=int, default=4, help="Number of attention heads (default: 4)")
-    val_parser.add_argument("--num_layers", type=int, default=4, help="Number of transformer encoder layers (default: 4)")
-    val_parser.add_argument("--dim_feedforward", type=int, default=256, help="Feedforward network dimension (default: 256)")
-    val_parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate (default: 0.1)")
-    val_parser.add_argument("--conv_kernel", type=int, default=7, help="Convolutional stem kernel size (default: 7)")
-    val_parser.add_argument("--conv_stride", type=int, default=4, help="Convolutional stem stride (default: 4)")
-    val_parser.add_argument("--conv_padding", type=int, default=3, help="Convolutional stem padding (default: 3)")
+    # Subparser for test
+    test_parser = subparsers.add_parser("test", help="Run test and compute MSE by reflectivity range")
+    test_parser.add_argument("--npy_path", type=str, required=True, help="Path to input .npy radar file")
+    test_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
+    test_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
+    test_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
+    test_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
+    test_parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
+    test_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
+    test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
+    test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
+    test_parser.add_argument("--d_model", type=int, default=128, help="Transformer model dimension (default: 128)")
+    test_parser.add_argument("--nhead", type=int, default=4, help="Number of attention heads (default: 4)")
+    test_parser.add_argument("--num_layers", type=int, default=4, help="Number of transformer encoder layers (default: 4)")
+    test_parser.add_argument("--dim_feedforward", type=int, default=256, help="Feedforward network dimension (default: 256)")
+    test_parser.add_argument("--dropout", type=float, default=0.1, help="Dropout rate (default: 0.1)")
+    test_parser.add_argument("--conv_kernel", type=int, default=7, help="Convolutional stem kernel size (default: 7)")
+    test_parser.add_argument("--conv_stride", type=int, default=4, help="Convolutional stem stride (default: 4)")
+    test_parser.add_argument("--conv_padding", type=int, default=3, help="Convolutional stem padding (default: 3)")
 
     args = parser.parse_args()
 
@@ -742,13 +751,15 @@ if __name__ == "__main__":
                 args.use_patches = False
             else:
                 raise ValueError("--use_patches must be True or False")
+        import ast
+        train_val_test_split = ast.literal_eval(args.train_val_test_split)
         try:
             train_radar_model(
                 npy_path=args.npy_path,
                 save_dir=args.save_dir,
                 seq_len_in=args.seq_len_in,
                 seq_len_out=args.seq_len_out,
-                train_frac=args.train_frac,
+                train_val_test_split=train_val_test_split,
                 batch_size=args.batch_size,
                 lr=args.lr,
                 d_model=args.d_model,
@@ -774,14 +785,14 @@ if __name__ == "__main__":
             )
         except Exception as e:
             print(f"Error during training: {e}")
-    elif args.command == "validate":
+    elif args.command == "test":
         try:
-            predict_validation_set(
+            predict_test_set(
                 npy_path=args.npy_path,
                 run_dir=args.run_dir,
                 seq_len_in=args.seq_len_in,
                 seq_len_out=args.seq_len_out,
-                train_frac=args.train_frac,
+                train_val_test_split=args.train_val_test_split,
                 batch_size=args.batch_size,
                 d_model=args.d_model,
                 nhead=args.nhead,
