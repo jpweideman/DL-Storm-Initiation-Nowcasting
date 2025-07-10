@@ -15,7 +15,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 ## Quickstart: End-to-End Example
 
 1. **Prepare Data**
-   - Place your raw `.h5` radar files in `data/raw/` (a small one day example dataset is already provided).
+   - Place your raw `.h5` radar files in `data/raw/` (a small example dataset of one day is already provided).
 
 2. **Process Data**
    - Step 1: Process raw data into intermediate chunks:

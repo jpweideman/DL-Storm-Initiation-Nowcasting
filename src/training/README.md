@@ -55,21 +55,40 @@ python src/training/train_unet_3D_cnn.py test \
 
 - For large datasets, it is possible to use the `--predictions_dir` argument to save prediction and target arrays in a separate directory (outside the run directory). 
 This is useful to avoid filling up the run directory with large files.
-<!-- ## Common Arguments
-- `--save_dir`: Directory to save checkpoints, args, and results.
-- `--npy_path`: Path to processed radar data (default: `data/processed/ZH_radar_dataset.npy`).
-- `--base_ch`: Base number of channels for U-Net encoder/decoder.
-- `--bottleneck_dims`: Tuple/list of widths for 3D CNN bottleneck, e.g., "(32, 64, 32)".
-- `--kernel_size`: Convolution kernel size (must be odd).
-- `--seq_len_in`: Input sequence length (default: 10).
-- `--seq_len_out`: Output sequence length (default: 1).
-- `--batch_size`: Batch size (default: 4).
-- `--epochs`: Number of training epochs (default: 15).
-- `--device`: Device to train on ('cuda' or 'cpu').
-- `--loss_name`: Loss function: mse or weighted_mse.
-- `--train_val_test_split`: Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., "(0.7,0.15,0.15)".
-- `--early_stopping_patience`: Number of epochs with no improvement before early stopping (default: 10).
-- `--no_wandb`: Disable wandb logging. -->
+
+## Patch-based Training: The `--use_patches` Argument
+
+All training and testing scripts support patch-based training and evaluation via the `--use_patches` argument. This enables the model to focus on spatial sub-regions (patches) of the radar data that are most relevant for learning, rather than always using the full spatial field.
+
+**How to use:**
+
+Add `--use_patches True` to your training or testing command, and optionally adjust the patch extraction parameters:
+
+- `--patch_size`: Size of each spatial patch (default: 64)
+- `--patch_stride`: Stride for patch extraction (default: 32)
+- `--patch_thresh`: Minimum normalized reflectivity for a pixel to be considered active (default: 0.35)
+- `--patch_frac`: Minimum fraction of active pixels in a patch (default: 0.05)
+
+**Example:**
+
+```bash
+python src/training/train_unet_3D_cnn.py train \
+  ... (other arguments) ... \
+  --use_patches True \
+  --patch_size 64 \
+  --patch_stride 32 \
+  --patch_thresh 0.35 \
+  --patch_frac 0.05
+```
+
+**Why use patch-based training?**
+
+- **Efficiency:** Training on patches allows the model to see more diverse and localized weather events per epoch, improving data efficiency and convergence speed.
+- **Focus on storms:** By extracting only patches with a significant fraction of high-reflectivity pixels, the model focuses on learning from regions with active weather (e.g., storms), rather than background or empty areas.
+- **Memory savings:** Patch-based training reduces GPU memory requirements, enabling larger batch sizes or higher-resolution inputs.
+- **Better generalization:** The model learns to predict local storm structures and dynamics, which can improve generalization to new events and locations.
+
+Patch-based training is highly recommended for radar nowcasting tasks, especially when storms are sparse in space and time.
 
 ## Outputs
 - **Checkpoints**: Saved in the run directory.

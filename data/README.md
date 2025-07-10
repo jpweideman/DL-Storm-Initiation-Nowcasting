@@ -20,8 +20,8 @@ This folder contains all data used in the pipeline.
 - **processed/**
   - Contains final training-ready data files.
   - These are the files used by all training and evaluation scripts.
-  - Clean, single large files for efficient training.
-  - Example: `data/processed/ZH_radar_dataset.npy`, `ZH_radar_filenames.json`
+  - Clean, single large files for training input.
+  - Example: `data/processed/{ZH_radar_dataset.npy, ZH_radar_filenames.json}`
 
 ## Data Flow
 

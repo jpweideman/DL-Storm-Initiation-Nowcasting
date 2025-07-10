@@ -56,7 +56,8 @@ data/intermediate/
 Joins all intermediate chunks into a single large training dataset.
 
 **Input:** Intermediate chunks in `data/intermediate/`
-**Output:** Final training files in `data/processed/`
+
+**Output:** Final training-ready files in `data/processed/`
 
 **Features:**
 - Concatenates all intermediate `.npy` files into a single large array
@@ -70,6 +71,5 @@ python src/data/join_processed_data.py
 ```
 
 **Output Files:**
-- `data/processed/ZH_radar_dataset.npy` - Complete training dataset
+- `data/processed/ZH_radar_dataset.npy` - Complete processed dataset
 - `data/processed/ZH_radar_filenames.json` - Complete list of original filenames
-- Clean, training-ready format

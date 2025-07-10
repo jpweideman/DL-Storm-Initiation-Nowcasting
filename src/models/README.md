@@ -18,9 +18,4 @@ This folder contains modular definitions of all deep learning models used for ra
   ```
 - All model architectures are defined as PyTorch `nn.Module` subclasses.
 
-## Adding New Models
-- Add a new file (e.g., `my_model.py`) with your model class.
-- Follow the structure of existing files for consistency.
-- Update training scripts to import and use your new model as needed.
-
-See [src/training/README.md](../training/README.md) for how models are used in training. 
+See [src/training/README.md](../training/README.md) for training models. 
