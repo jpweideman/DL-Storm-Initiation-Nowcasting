@@ -1,6 +1,7 @@
 data/processed/
 data/intermediate/
 predictions/
+__pycache__/
 
 # runs/
 # wandb/
