@@ -1,8 +1,7 @@
-Data/
+data/
 # runs/
 # wandb/
 runs_old/
 wandb_old/
 *.ipynb
 
-#convLSTM_pytorch.ipynb

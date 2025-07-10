@@ -1,14 +1,19 @@
-import argparse
+import sys
 from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
+import argparse
 import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, Subset
 import wandb
+import ast
 import os
 import random
 from tqdm import tqdm
-import ast
+
+from src.models.unet_conv_lstm import UNetConvLSTM
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -21,44 +26,54 @@ def set_seed(seed=42):
 
 set_seed(42)
 
-# Dataset definitions (copied from train_conv_lstm.py)
+# Dataset – raw dBZ which gets normalized by max
+
 class RadarWindowDataset(Dataset):
-    def __init__(self, cube_norm, seq_in, seq_out, maxv=85.0):
-        self.cube = cube_norm
+    def __init__(self, cube, seq_in, seq_out, maxv):
+        # cube: np.ndarray shape (T,C,H,W) in original scale, memory-mapped
+        self.cube = cube
         self.seq_in = seq_in
         self.seq_out = seq_out
         self.maxv = maxv
-        self.last = cube_norm.shape[0] - seq_in - seq_out + 1
+        self.last = cube.shape[0] - seq_in - seq_out + 1
+
     def __len__(self):
         return self.last
+
     def __getitem__(self, i):
+        # Only load the required slice, clip negatives, and normalize
         X = np.maximum(self.cube[i:i+self.seq_in], 0) / (self.maxv + 1e-6)
         Y = np.maximum(self.cube[i+self.seq_in:i+self.seq_in+self.seq_out], 0) / (self.maxv + 1e-6)
         X = X.astype(np.float32)
         Y = Y.astype(np.float32).squeeze(0)
         return torch.from_numpy(X), torch.from_numpy(Y)
 
+
 class PatchRadarWindowDataset(Dataset):
-    def __init__(self, cube_norm, seq_in, seq_out, patch_size=64, patch_stride=64, patch_thresh=0.4, patch_frac=0.15, patch_index_path=None, maxv=85.0):
-        self.cube = cube_norm
+    def __init__(self, cube, seq_in, seq_out, maxv, patch_size=64, patch_stride=64, patch_thresh=0.4, patch_frac=0.15, patch_index_path=None):
+        # cube: np.ndarray shape (T,C,H,W) in original scale, memory-mapped
+        self.cube = cube
         self.seq_in = seq_in
         self.seq_out = seq_out
+        self.maxv = maxv
         self.patch_size = patch_size
         self.patch_stride = patch_stride
         self.patch_thresh = patch_thresh
         self.patch_frac = patch_frac
-        self.maxv = maxv
         self.patches = []  # List of (t, y, x)
-        T, C, H, W = cube_norm.shape
+        T, C, H, W = cube.shape
         last = T - seq_in - seq_out + 1
+        # Patch index caching
         if patch_index_path is not None and os.path.exists(patch_index_path):
             print(f"Loading patch indices from {patch_index_path}")
             self.patches = np.load(patch_index_path, allow_pickle=True).tolist()
         else:
-            for t in tqdm(range(last), desc="Extracting patches"):
+            for t in tqdm(range(last), desc='Extracting patches'):
                 for y in range(0, H - patch_size + 1, patch_stride):
                     for x in range(0, W - patch_size + 1, patch_stride):
-                        Y_patch = np.maximum(self.cube[t+seq_in:t+seq_in+seq_out, :, y:y+patch_size, x:x+patch_size], 0) / (self.maxv + 1e-6)
+                        Y_patch = np.maximum(
+                            cube[t+seq_in:t+seq_in+seq_out, :, y:y+patch_size, x:x+patch_size], 0
+                        ) / (maxv + 1e-6)
                         total_pix = Y_patch.size
                         n_above = (Y_patch > patch_thresh).sum()
                         if n_above / total_pix >= patch_frac:
@@ -66,111 +81,27 @@ class PatchRadarWindowDataset(Dataset):
             if patch_index_path is not None:
                 np.save(patch_index_path, np.array(self.patches, dtype=object))
                 print(f"Saved patch indices to {patch_index_path}")
+
     def __len__(self):
         return len(self.patches)
+
     def __getitem__(self, i):
         t, y, x = self.patches[i]
-        X_patch = np.maximum(self.cube[t:t+self.seq_in, :, y:y+self.patch_size, x:x+self.patch_size], 0) / (self.maxv + 1e-6)
-        Y_patch = np.maximum(self.cube[t+self.seq_in:t+self.seq_in+self.seq_out, :, y:y+self.patch_size, x:x+self.patch_size], 0) / (self.maxv + 1e-6)
+        X_patch = np.maximum(
+            self.cube[t:t+self.seq_in, :, y:y+self.patch_size, x:x+self.patch_size], 0
+        ) / (self.maxv + 1e-6)
+        Y_patch = np.maximum(
+            self.cube[t+self.seq_in:t+self.seq_in+self.seq_out, :, y:y+self.patch_size, x:x+self.patch_size], 0
+        ) / (self.maxv + 1e-6)
         X_patch = X_patch.astype(np.float32)
         Y_patch = Y_patch.astype(np.float32).squeeze(0)
         return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
 
 
-class DoubleConv3D(nn.Module):
-    """(Conv3d => ReLU) * 2"""
-    def __init__(self, in_ch, out_ch, kernel=3):
-        super().__init__()
-        p = kernel // 2
-        self.conv = nn.Sequential(
-            nn.Conv3d(in_ch, out_ch, kernel, padding=p),
-            nn.ReLU(inplace=True),
-            nn.Conv3d(out_ch, out_ch, kernel, padding=p),
-            nn.ReLU(inplace=True)
-        )
-    def forward(self, x):
-        return self.conv(x)
+# UNet ConvLSTM model is now imported from src.models.unet_conv_lstm
 
-class Down3D(nn.Module):
-    """Downscaling with maxpool then double conv"""
-    def __init__(self, in_ch, out_ch, kernel=3):
-        super().__init__()
-        self.mpconv = nn.Sequential(
-            nn.MaxPool3d(2),
-            DoubleConv3D(in_ch, out_ch, kernel)
-        )
-    def forward(self, x):
-        return self.mpconv(x)
 
-class Up3D(nn.Module):
-    """Upscaling then double conv"""
-    def __init__(self, in_ch, skip_ch, out_ch, kernel=3):
-        super().__init__()
-        self.up = nn.ConvTranspose3d(in_ch, in_ch // 2, 2, stride=2)
-        self.conv = DoubleConv3D(in_ch // 2 + skip_ch, out_ch, kernel)
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        # input is (B, C, D, H, W)
-        diffD = x2.size()[2] - x1.size()[2]
-        diffY = x2.size()[3] - x1.size()[3]
-        diffX = x2.size()[4] - x1.size()[4]
-        x1 = nn.functional.pad(x1, [diffX // 2, diffX - diffX // 2,
-                                    diffY // 2, diffY - diffY // 2,
-                                    diffD // 2, diffD - diffD // 2])
-        x = torch.cat([x2, x1], dim=1)
-        return self.conv(x)
-
-class UNet3DCNN(nn.Module):
-    """
-    U-Net 3D CNN for spatiotemporal prediction.
-
-    Parameters
-    ----------
-    in_ch : int
-        Number of input channels.
-    out_ch : int
-        Number of output channels.
-    base_ch : int, optional
-        Base number of channels for U-Net encoder/decoder (default: 32).
-    bottleneck_dims : tuple/list, optional
-        Sequence of widths for the 3D CNN bottleneck layers (e.g., (32, 64, 32)).
-        The number of entries determines the depth of the bottleneck.
-    kernel : int, optional
-        Kernel size (default: 3).
-    seq_len_out : int, optional
-        Output sequence length (default: 1).
-    """
-    def __init__(self, in_ch, out_ch, base_ch=32, bottleneck_dims=(64,), kernel=3, seq_len_out=1):
-        super().__init__()
-        self.seq_len_out = seq_len_out
-        # Encoder
-        self.inc = DoubleConv3D(in_ch, base_ch, kernel)
-        self.down1 = Down3D(base_ch, base_ch*2, kernel)
-        self.down2 = Down3D(base_ch*2, base_ch*4, kernel)
-        # Bottleneck: stack 3D convs with user-specified widths
-        bottleneck_layers = []
-        in_channels = base_ch*4
-        for width in bottleneck_dims:
-            bottleneck_layers.append(DoubleConv3D(in_channels, width, kernel))
-            in_channels = width
-        self.bottleneck = nn.Sequential(*bottleneck_layers)
-        # Decoder
-        self.up1 = Up3D(in_channels, base_ch*2, base_ch*2, kernel)
-        self.up2 = Up3D(base_ch*2, base_ch, base_ch, kernel)
-        self.outc = nn.Conv3d(base_ch, out_ch, 1)
-    def forward(self, x):
-        # x: (B, C, D, H, W)
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x_bottleneck = self.bottleneck(x3)
-        x = self.up1(x_bottleneck, x2)
-        x = self.up2(x, x1)
-        x = self.outc(x)
-        # Output: (B, out_ch, D, H, W)
-        # Take the last seq_len_out slices along D
-        x = x[:, :, -self.seq_len_out:, :, :]  # (B, out_ch, seq_len_out, H, W)
-        return x
+# Weighted MSE loss
 
 def mse_loss(pred, target, maxv=85.0, eps=1e-6):
     """
@@ -194,7 +125,24 @@ def weighted_mse_loss(pred, target, threshold=30.0, weight_high=10.0, maxv=85.0,
     weight[target_dBZ > threshold] = weight_high
     return ((pred_dBZ - target_dBZ) ** 2 * weight).mean()
 
+
 # Training function
+
+def atomic_save(obj, path):
+    tmp_path = str(path) + ".tmp"
+    torch.save(obj, tmp_path)
+    os.replace(tmp_path, path)
+
+# Instead of computing maxv from training data, we use a fixed value of 85. Almost all the data is below 85.           
+# def compute_maxv(cube, end_idx, chunk_size=100):
+#     maxv = 0.0
+#     for i in range(0, end_idx, chunk_size):
+#         chunk = cube[i:min(i+chunk_size, end_idx)]
+#         chunk_max = np.max(np.maximum(chunk, 0))
+#         if chunk_max > maxv:
+#             maxv = chunk_max
+#     return float(maxv)
+
 def train_radar_model(
     npy_path: str,
     save_dir: str,
@@ -204,9 +152,7 @@ def train_radar_model(
     train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
     lr: float = 2e-4,
-    base_ch: int = 32,
-    bottleneck_dims: tuple = (64,),
-    kernel_size: int = 3,
+    kernel: int = 3,
     epochs: int = 15,
     device: str = "cuda" ,
     loss_name: str = "mse",
@@ -217,11 +163,13 @@ def train_radar_model(
     patch_thresh: float = 0.4,
     patch_frac: float = 0.15,
     use_patches: bool = False,
+    base_ch: int = 32,
+    lstm_hid: int = 64,
     wandb_project: str = "radar-forecasting",
     early_stopping_patience: int = 10,
 ):
     """
-    Train a U-Net 3D CNN radar forecasting model.
+    Train a ConvLSTM radar forecasting model.
 
     Parameters
     ----------
@@ -239,23 +187,18 @@ def train_radar_model(
         Batch size for training (default: 4).
     lr : float, optional
         Learning rate for the optimizer (default: 2e-4).
-    base_ch : int, optional
-        Base number of channels for U-Net encoder/decoder (default: 32).
-    bottleneck_dims : tuple/list, optional
-        Sequence of widths for the 3D CNN bottleneck layers (e.g., (32, 64, 32)).
-        The number of entries determines the depth of the bottleneck.
-    kernel_size : int, optional
-        Convolution kernel size (default: 3).
+    kernel : int, optional
+        Convolution kernel size for all convolutions (default: 3, must be odd).
     epochs : int, optional
         Number of training epochs (default: 15).
     device : str, optional
         Device to run training on ('cuda' or 'cpu'); defaults to 'cuda' if available.
     loss_name : str, optional
         Loss function to use; either 'mse', 'weighted_mse'.
-    loss_weight_thresh : float, optional
-        Threshold for weighted MSE (default: 30.0 dBZ).
-    loss_weight_high : float, optional
-        Weight for high-reflectivity pixels (default: 10.0).
+    loss_weight_thresh : float, optional (used for weighted_mse and masked_mse)
+        Normalized reflectivity threshold (e.g., 0.40 for normalized reflectivity between 0 and 1. Equivalent to 40 dBZ in original scale).
+    loss_weight_high : float, optional (used for weighted_mse)
+        Weight multiplier for pixels where true > threshold.
     patch_size : int, optional
         Size of spatial patches to extract (default: 64).
     patch_stride : int, optional
@@ -266,6 +209,12 @@ def train_radar_model(
         Minimum fraction of pixels in patch above threshold (default: 0.15).
     use_patches : bool, optional
         Whether to use patch-based training (default: False).
+    base_ch : int, optional
+        Base number of channels for U-Net (default: 32).
+    lstm_hid : int or tuple/list of int, optional
+        Number of hidden channels in the ConvLSTM bottleneck (default: 64).
+        If a tuple or list is provided, multiple ConvLSTM layers are stacked in the bottleneck,
+        with each value specifying the hidden size of each layer.
     wandb_project : str, optional
         wandb project name (default: "radar-forecasting").
     early_stopping_patience : int, optional
@@ -275,11 +224,7 @@ def train_radar_model(
     -------
     None
     """
-    if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
-        raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
-    if not abs(sum(train_val_test_split) - 1.0) < 1e-6:
-        raise ValueError(f"train_val_test_split must sum to 1.0, got {train_val_test_split} (sum={sum(train_val_test_split)})")
-    train_frac, val_frac, _ = train_val_test_split
+        
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
@@ -290,9 +235,17 @@ def train_radar_model(
     print(f"Loaded {npy_path} → {cube.shape}")
 
     # chronological split & min-max
+    if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
+        raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
+    if not abs(sum(train_val_test_split) - 1.0) < 1e-6:
+        raise ValueError(f"train_val_test_split must sum to 1.0, got {train_val_test_split} (sum={sum(train_val_test_split)})")
+    train_frac, val_frac, _ = train_val_test_split
     n_total = T - seq_len_in - seq_len_out + 1
     n_train = int(n_total * train_frac)
     n_val = int(n_total * val_frac)
+    idx_train = list(range(0, n_train))
+    idx_val = list(range(n_train, n_train + n_val))
+    # maxv = compute_maxv(cube, n_train_plus, chunk_size=100)^
     maxv = 85.0
     print(f"Normalization maxv (fixed): {maxv}")
     np.savez(save_dir/"minmax_stats.npz", maxv=maxv)
@@ -301,29 +254,29 @@ def train_radar_model(
     # DataLoaders
     if use_patches:
         patch_index_path = str(save_dir / "patch_indices.npy")
-        full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
-        train_idx = []
-        val_idx = []
-        for i, (t, y, x) in enumerate(full_ds.patches):
-            if t < n_train:
-                train_idx.append(i)
-            elif t < n_train + n_val:
-                val_idx.append(i)
-        train_ds = Subset(full_ds, train_idx)
-        val_ds   = Subset(full_ds, val_idx)
+        full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, maxv, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path)
+        train_ds = Subset(full_ds, idx_train)
+        val_ds   = Subset(full_ds, idx_val)
         train_dl = DataLoader(train_ds, batch_size, shuffle=True)
-        val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
+        val_dl   = DataLoader(val_ds,   batch_size, shuffle=False)
         print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}")
     else:
-        full_ds  = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
-        train_ds = Subset(full_ds, list(range(0, n_train)))
-        val_ds   = Subset(full_ds, list(range(n_train, n_train + n_val)))
+        full_ds  = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv)
+        train_ds = Subset(full_ds, idx_train)
+        val_ds   = Subset(full_ds, idx_val)
         train_dl = DataLoader(train_ds, batch_size, shuffle=False)
-        val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
+        val_dl   = DataLoader(val_ds,   batch_size, shuffle=False)
         print(f"Samples  train={len(train_ds)}  val={len(val_ds)}")
 
     # model, optimizer, loss
-    model     = UNet3DCNN(in_ch=C, out_ch=C, base_ch=base_ch, bottleneck_dims=bottleneck_dims, kernel=kernel_size, seq_len_out=seq_len_out).to(device)
+    model     = UNetConvLSTM(
+        in_ch=C,
+        out_ch=C,
+        base_ch=base_ch,
+        lstm_hid=lstm_hid,
+        seq_len=seq_len_in,
+        kernel=kernel
+    ).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     if loss_name == "mse":
         criterion = lambda pred, tgt: mse_loss(pred, tgt, maxv=maxv, eps=eps)
@@ -361,14 +314,13 @@ def train_radar_model(
         name=run_id,
         id=run_id,
         resume="allow",
+        dir="experiments/wandb",
         config={
             'seq_len_in': seq_len_in,
             'train_frac': train_frac,
             'batch_size': batch_size,
             'lr': lr,
-            'base_ch': base_ch,
-            'bottleneck_dims': bottleneck_dims,
-            'kernel_size': kernel_size,
+            'kernel': kernel,
             'epochs': epochs,
             'device': device,
             'loss_name': loss_name,
@@ -379,6 +331,8 @@ def train_radar_model(
             'patch_thresh': patch_thresh,
             'patch_frac': patch_frac,
             'use_patches': use_patches,
+            'base_ch': base_ch,
+            'lstm_hid': lstm_hid,
             'early_stopping_patience': early_stopping_patience
         }
     )
@@ -391,20 +345,11 @@ def train_radar_model(
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
                 if use_patches:
-                    xb, yb = batch[0], batch[1]
+                    xb, yb = batch[0], batch[1]  # ignore t, y, x
                 else:
                     xb, yb = batch
                 xb, yb = xb.to(device), yb.to(device)
-                xb = xb.permute(0, 2, 1, 3, 4)  # (B, C, D, H, W)
-                # Ensure yb is (B, C, seq_len_out, H, W)
-                if yb.ndim == 4:
-                    yb = yb.unsqueeze(2)
                 pred  = model(xb)
-                # Squeeze singleton temporal dimension if present
-                if pred.shape[2] == 1:
-                    pred = pred.squeeze(2)
-                if yb.shape[2] == 1:
-                    yb = yb.squeeze(2)
                 loss  = criterion(pred, yb)
                 if train:
                     optimizer.zero_grad(); loss.backward(); optimizer.step()
@@ -435,23 +380,24 @@ def train_radar_model(
     print("Done. Checkpoints in", save_dir.resolve())
     wandb.finish()
 
+
 def compute_mse_by_ranges(pred, target, ranges):
     """
     Compute MSE for different reflectivity ranges.
-
-    Parameters
-    ----------
-    pred : np.ndarray
-        Predicted values.
-    target : np.ndarray
-        Ground truth values.
-    ranges : list of tuple
-        List of (min, max) ranges to compute MSE for.
-
-    Returns
-    -------
+    
+    Parameters:
+    -----------
+    pred: np.ndarray
+        Predicted values
+    target: np.ndarray
+        Ground truth values
+    ranges: list of tuples
+        List of (min, max) ranges to compute MSE for
+        
+    Returns:
+    --------
     dict
-        Dictionary with MSE values for each range.
+        Dictionary with MSE values for each range
     """
     mse_by_range = {}
     for r_min, r_max in ranges:
@@ -472,53 +418,54 @@ def predict_test_set(
     seq_len_out: int = 1,
     train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
-    base_ch: int = 32,
-    bottleneck_dims: tuple = (64,),
-    kernel_size: int = 3,
+    kernel: int = 3,
     which: str = "best",
     device: str = None,
     save_arrays: bool = True,
+    base_ch: int = 32,
+    lstm_hid: int = 64,
 ):
     """
-    Run inference on the test set using a U-Net 3D CNN model from train_radar_model.
+    Run inference on the test set using a U-Net+ConvLSTM model from train_radar_model.
 
     Parameters
     ----------
     npy_path : str
         Path to the input NumPy file containing radar reflectivity data with shape (T, C, H, W).
     run_dir : str
-        Directory containing model checkpoints and statistics from training.
+        Directory containing model checkpoints and statistics.
     seq_len_in : int, optional
-        Number of input radar frames to use for prediction (default: 10).
+        Number of input time steps (default: 10).
     seq_len_out : int, optional
-        Number of future radar frames to predict (default: 1).
+        Number of output time steps to predict (default: 1).
     train_val_test_split : tuple, optional
         Tuple/list of three floats (train, val, test) that sum to 1.0 (default: (0.7, 0.15, 0.15)).
     batch_size : int, optional
         Batch size for inference (default: 4).
-    base_ch : int, optional
-        Base number of channels for U-Net encoder/decoder (default: 32).
-    bottleneck_dims : tuple/list, optional
-        Sequence of widths for the 3D CNN bottleneck layers (e.g., (32, 64, 32)).
-        The number of entries determines the depth of the bottleneck.
-    kernel_size : int, optional
+    kernel : int, optional
         Convolution kernel size (default: 3).
     which : str, optional
-        Which checkpoint to load - 'best' for best validation checkpoint or 'latest' (default: 'best').
+        Which checkpoint to load: 'best' for best validation or 'latest' (default: 'best').
     device : str, optional
         Device to run inference on (default: 'cpu').
     save_arrays : bool, optional
-        Whether to save predictions and targets as memory-mapped .npy files in run_dir (default: True).
-        Files will be named 'val_preds_dBZ.npy' and 'val_targets_dBZ.npy'.
+        Whether to save predictions and targets as .npy files in run_dir (default: True).
+    base_ch : int, optional
+        Base number of channels for U-Net (default: 32).
+    lstm_hid : int or tuple/list of int, optional
+        Number of hidden channels in the ConvLSTM bottleneck (default: 64).
+        If a tuple or list is provided, multiple ConvLSTM layers are stacked in the bottleneck,
+        with each value specifying the hidden size of each layer.
 
     Returns
     -------
     None
-        The function saves predictions and targets to disk if save_arrays=True, and prints MSE metrics
-        for different reflectivity ranges (0-20, 20-35, 35-45, 45-100 dBZ).
+        This function does not return arrays. Instead, it saves the predictions and targets as memmap .npy files
+        (val_preds_dBZ.npy, val_targets_dBZ.npy) and saves their shape and dtype as .npz metadata files
+        (val_preds_dBZ_meta.npz, val_targets_dBZ_meta.npz) in the run_dir for later loading.
     """
+
     import numpy as np
-    from tqdm import tqdm
 
     device = device or "cpu"
     run_dir = Path(run_dir)
@@ -538,11 +485,18 @@ def predict_test_set(
     n_train = int(n_total * train_frac)
     n_val = int(n_total * val_frac)
     idx_test = list(range(n_train + n_val, n_total))
-    ds      = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
+    ds      = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=85.0)
     test_ds  = Subset(ds, idx_test)
     dl      = DataLoader(test_ds, batch_size, shuffle=False)
 
-    model = UNet3DCNN(in_ch=C, out_ch=C, base_ch=base_ch, bottleneck_dims=bottleneck_dims, kernel=kernel_size, seq_len_out=seq_len_out)
+    model = UNetConvLSTM(
+        in_ch=C,
+        out_ch=C,
+        base_ch=base_ch,
+        lstm_hid=lstm_hid,
+        seq_len=seq_len_in,
+        kernel=kernel
+    )
     st = torch.load(ckpt, map_location=device)
     if isinstance(st, dict) and 'model' in st:
         st=st['model']
@@ -566,18 +520,10 @@ def predict_test_set(
     with torch.no_grad():
         for xb, yb in tqdm(dl, desc='Testing', total=len(dl)):
             xb = xb.to(device)
-            xb = xb.permute(0, 2, 1, 3, 4)  # (B, C, D, H, W)
-            if yb.ndim == 4:
-                yb = yb.unsqueeze(2)
-            out_n = model(xb)
-            if out_n.shape[2] == 1:
-                out_n = out_n.squeeze(2)
-            if yb.shape[2] == 1:
-                yb = yb.squeeze(2)
-            out_n = out_n.cpu().numpy()
-            yb = yb.cpu().numpy()
+            out_n = model(xb).cpu().numpy()  # (B, C, H, W)
+            yb_np = yb.numpy()  # (B, C, H, W)
             out_n_dBZ = out_n * (maxv+eps)
-            yb_dBZ = yb * (maxv+eps)
+            yb_dBZ = yb_np * (maxv+eps)
             batch_size = out_n.shape[0]
             if save_arrays:
                 preds_memmap[idx:idx+batch_size] = out_n_dBZ
@@ -595,6 +541,12 @@ def predict_test_set(
     if save_arrays:
         preds_memmap.flush()
         gts_memmap.flush()
+        # Check file integrity
+        try:
+            arr = np.load(run_dir/'test_preds_dBZ.npy', mmap_mode='r')
+            print('test_preds_dBZ.npy loaded successfully:', arr.shape)
+        except Exception as e:
+            print('Error loading test_preds_dBZ.npy:', e)
         # Save shape and dtype metadata for memmap arrays
         meta = {
             'shape': (N, C, H, W),
@@ -611,31 +563,28 @@ def predict_test_set(
             mse_by_range[key] = mse_sums[key] / mse_counts[key]
         else:
             mse_by_range[key] = np.nan
+    
     # Save MSE metrics
     np.savez(run_dir/"mse_by_range.npz", **mse_by_range)
     print("MSE by reflectivity range:")
     for range_name, mse in mse_by_range.items():
         print(f"{range_name}: {mse:.4f}")
+    
     if save_arrays:
         print("Saved test_preds_dBZ.npy + test_targets_dBZ.npy →", run_dir)
+
     return None
 
-def atomic_save(obj, path):
-    tmp_path = str(path) + ".tmp"
-    torch.save(obj, tmp_path)
-    os.replace(tmp_path, path)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train or validate a U-Net 3D CNN radar forecasting model.")
+    parser = argparse.ArgumentParser(description="Train or validate a U-Net+ConvLSTM radar forecasting model.")
     subparsers = parser.add_subparsers(dest="command", help="Sub-commands")
 
     # Subparser for training
     train_parser = subparsers.add_parser("train", help="Train a model")
     train_parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
-    train_parser.add_argument("--base_ch", type=int, required=True, help="Base number of channels for U-Net encoder/decoder")
-    train_parser.add_argument("--bottleneck_dims", type=str, required=True, help="Tuple/list of widths for 3D CNN bottleneck, e.g., (32, 64, 32)")
-    train_parser.add_argument("--kernel_size", type=int, required=True, help="Kernel size (must be odd number)")
-    train_parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
+    train_parser.add_argument("--kernel", type=int, default=3, help="Kernel size for all convolutions (default: 3, must be odd)")
+    train_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
@@ -645,12 +594,15 @@ if __name__ == "__main__":
     train_parser.add_argument("--device", type=str, default='cuda', help="Device to train on ('cuda' or 'cpu')")
     train_parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse or weighted_mse (all in dBZ units)")
     train_parser.add_argument("--loss_weight_thresh", type=float, default=30.0, help="Threshold in dBZ to apply higher loss weighting (default: 30.0 dBZ)")
-    train_parser.add_argument("--loss_weight_high", type=float, default=10.0, help="Weight multiplier for pixels above threshold (default: 10.0)")
+    train_parser.add_argument("--loss_weight_high", type=float, default=10.0,
+                        help="Weight multiplier for pixels above threshold (default: 10.0)")
     train_parser.add_argument("--patch_size", type=int, default=64, help="Size of spatial patches to extract (default: 64)")
     train_parser.add_argument("--patch_stride", type=int, default=32, help="Stride for patch extraction (default: 32)")
     train_parser.add_argument("--patch_thresh", type=float, default=0.35, help="Threshold for extracting patches (default: 0.4)")
     train_parser.add_argument("--patch_frac", type=float, default=0.05, help="Minimum fraction of pixels in patch above threshold (default: 0.05)")
     train_parser.add_argument("--use_patches", type=str, default="False", help="Whether to use patch-based training: True or False (default: False)")
+    train_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net (default: 32)")
+    train_parser.add_argument("--lstm_hid", type=str, default="64", help="Number of hidden channels in the ConvLSTM bottleneck (int or tuple/list, e.g., 64 or (64,128))")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
     train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")
 
@@ -662,12 +614,12 @@ if __name__ == "__main__":
     test_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     test_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
     test_parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
-    test_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
-    test_parser.add_argument("--bottleneck_dims", type=str, default="(64,)", help="Bottleneck dims as tuple, e.g., (64,)")
-    test_parser.add_argument("--kernel_size", type=int, default=3, help="Kernel size (default: 3)")
+    test_parser.add_argument("--kernel", type=int, default=3, help="Kernel size for all convolutions (default: 3)")
     test_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
     test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
     test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
+    test_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
+    test_parser.add_argument("--lstm_hid", type=str, default="64", help="ConvLSTM hidden dims as int or tuple, e.g., 64 or (64,128)")
 
     args = parser.parse_args()
 
@@ -686,14 +638,17 @@ if __name__ == "__main__":
             else:
                 raise ValueError("--use_patches must be True or False")
         try:
-            bottleneck_dims = ast.literal_eval(args.bottleneck_dims)
-            if not isinstance(bottleneck_dims, (tuple, list)) or len(bottleneck_dims) < 1:
-                raise ValueError
+            train_val_test_split = ast.literal_eval(args.train_val_test_split)
+            if isinstance(args.lstm_hid, str):
+                lstm_hid = ast.literal_eval(args.lstm_hid)
+            else:
+                lstm_hid = args.lstm_hid
         except Exception:
-            raise ValueError("bottleneck_dims must be a tuple/list of widths, like (32,64,32)")
-        if args.kernel_size % 2 == 0:
-            raise ValueError("kernel_size must be an odd integer.")
-        train_val_test_split = ast.literal_eval(args.train_val_test_split)
+            raise ValueError("lstm_hid must be an int or tuple/list, like 64 or (64,128)")
+
+        if args.kernel % 2 == 0:
+            raise ValueError("kernel must be an odd integer.")
+
         train_radar_model(
             npy_path=args.npy_path,
             save_dir=args.save_dir,
@@ -702,9 +657,7 @@ if __name__ == "__main__":
             train_val_test_split=train_val_test_split,
             batch_size=args.batch_size,
             lr=args.lr,
-            base_ch=args.base_ch,
-            bottleneck_dims=bottleneck_dims,
-            kernel_size=args.kernel_size,
+            kernel=args.kernel,
             epochs=args.epochs,
             device=args.device,
             loss_name=args.loss_name,
@@ -715,6 +668,8 @@ if __name__ == "__main__":
             patch_thresh=args.patch_thresh,
             patch_frac=args.patch_frac,
             use_patches=args.use_patches,
+            base_ch=args.base_ch,
+            lstm_hid=lstm_hid,
             wandb_project=args.wandb_project,
             early_stopping_patience=args.early_stopping_patience,
         )
@@ -725,24 +680,23 @@ if __name__ == "__main__":
         with open(os.path.join(args.run_dir, "args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
         try:
-            bottleneck_dims = ast.literal_eval(args.bottleneck_dims)
-            if not isinstance(bottleneck_dims, (tuple, list)) or len(bottleneck_dims) < 1:
-                raise ValueError
+            if isinstance(args.lstm_hid, str):
+                lstm_hid = ast.literal_eval(args.lstm_hid)
+            else:
+                lstm_hid = args.lstm_hid
         except Exception:
-            raise ValueError("bottleneck_dims must be a tuple/list of widths, like (32,64,32)")
-        train_val_test_split = ast.literal_eval(args.train_val_test_split)
+            raise ValueError("lstm_hid must be an int or tuple/list, like 64 or (64,128)")
         predict_test_set(
             npy_path=args.npy_path,
             run_dir=args.run_dir,
             seq_len_in=args.seq_len_in,
             seq_len_out=args.seq_len_out,
-            train_val_test_split=train_val_test_split,
+            train_val_test_split=ast.literal_eval(args.train_val_test_split),
             batch_size=args.batch_size,
-            base_ch=args.base_ch,
-            bottleneck_dims=bottleneck_dims,
-            kernel_size=args.kernel_size,
+            kernel=args.kernel,
             which=args.which,
             device=args.device,
             save_arrays=args.save_arrays,
+            base_ch=args.base_ch,
+            lstm_hid=lstm_hid,
         )
-

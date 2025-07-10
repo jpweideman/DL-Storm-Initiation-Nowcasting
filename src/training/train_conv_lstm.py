@@ -1,5 +1,8 @@
-import argparse
+import sys
 from pathlib import Path
+sys.path.append(str(Path(__file__).parent.parent))
+
+import argparse
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,6 +12,8 @@ import os
 import random
 from tqdm import tqdm
 import ast
+
+from src.models.conv_lstm import ConvLSTM
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -83,57 +88,7 @@ class PatchRadarWindowDataset(Dataset):
         return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
 
 
-# ConvLSTM building blocks
-class ConvLSTMCell(nn.Module):
-    def __init__(self, in_ch, hid_ch, kernel=3):
-        super().__init__()
-        assert kernel % 2 == 1, "Kernel size must be odd for ConvLSTM to preserve spatial dimensions!"
-        p = kernel // 2
-        self.hid_ch = hid_ch
-        self.conv = nn.Conv2d(in_ch + hid_ch, 4 * hid_ch, kernel, padding=p)
-
-    def forward(self, x, h, c):
-        gates = self.conv(torch.cat([x, h], dim=1))
-        i,f,o,g = gates.chunk(4, dim=1)
-        i, f, o = torch.sigmoid(i), torch.sigmoid(f), torch.sigmoid(o)
-        g       = torch.tanh(g)
-        c_next  = f * c + i * g
-        h_next  = o * torch.tanh(c_next)
-        return h_next, c_next
-
-    def init_hidden(self, B, H, W, device):
-        h = torch.zeros(B, self.hid_ch, H, W, device=device)
-        return h, h.clone()
-    
-    
-class ConvLSTM(nn.Module):
-    def __init__(self, in_ch, hidden_dims=(64, 64), kernel=3):
-        """
-        in_ch: input channels
-        hidden_dims: list of hidden dimensions per layer
-        kernel: kernel size
-        """
-        super().__init__()
-        self.layers = nn.ModuleList()
-        for idx, h in enumerate(hidden_dims):
-            i_ch = in_ch if idx == 0 else hidden_dims[idx-1]
-            self.layers.append(ConvLSTMCell(i_ch, h, kernel))
-        self.to_out = nn.Conv2d(hidden_dims[-1], in_ch, 1)
-
-    def forward(self, x):
-        B, S, _, H, W = x.shape
-        device = x.device
-        h_list, c_list = [], []
-        for cell in self.layers:
-            h, c = cell.init_hidden(B, H, W, device)
-            h_list.append(h)
-            c_list.append(c)
-        for t in range(S):
-            xt = x[:, t]
-            for i, cell in enumerate(self.layers):
-                h_list[i], c_list[i] = cell(xt, h_list[i], c_list[i])
-                xt = h_list[i]
-        return self.to_out(xt)
+# ConvLSTM model is now imported from src.models.conv_lstm
 
 
 # Weighted MSE loss
@@ -333,6 +288,7 @@ def train_radar_model(
         name=run_id,
         id=run_id,
         resume="allow",
+        dir="experiments/wandb",
         config={
             'seq_len_in': seq_len_in,
             'train_frac': train_frac,
@@ -578,7 +534,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
     train_parser.add_argument("--hidden_dims", type=str, required=True, help="Hidden dimensions as tuple, e.g., (64, 64)")
     train_parser.add_argument("--kernel_size", type=int, required=True, help="Kernel size (must be odd number)")
-    train_parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
+    train_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")

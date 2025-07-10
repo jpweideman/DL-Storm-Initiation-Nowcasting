@@ -693,7 +693,7 @@ if __name__ == "__main__":
     # Subparser for training
     train_parser = subparsers.add_parser("train", help="Train a model")
     train_parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
-    train_parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
+    train_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")

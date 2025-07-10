@@ -647,7 +647,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--base_ch", type=int, required=True, help="Base number of channels for U-Net encoder/decoder")
     train_parser.add_argument("--bottleneck_dims", type=str, required=True, help="Tuple/list of widths for 3D CNN bottleneck, e.g., (32, 64, 32)")
     train_parser.add_argument("--kernel_size", type=int, required=True, help="Kernel size (must be odd number)")
-    train_parser.add_argument("--npy_path", type=str, default="Data/ZH_radar_dataset.npy", help="Path to input .npy radar file")
+    train_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
