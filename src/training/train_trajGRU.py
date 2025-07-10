@@ -401,6 +401,7 @@ def predict_test_set(
     which: str = "best",
     device: str = None,
     save_arrays: bool = True,
+    predictions_dir: str = None,
 ):
     """
     Run inference on the test set using a TrajGRU model.
@@ -436,14 +437,18 @@ def predict_test_set(
     device : str, optional
         Device to run inference on (default: 'cpu').
     save_arrays : bool, optional
-        Whether to save predictions and targets as memory-mapped .npy files in run_dir (default: True).
+        Whether to save predictions and targets as memory-mapped .npy files (default: True).
         Files will be named 'test_preds_dBZ.npy' and 'test_targets_dBZ.npy'.
+    predictions_dir : str, optional
+        Directory to save large prediction/target files (default: same as run_dir).
+        If None, files are saved in run_dir. If specified, creates the directory if it doesn't exist.
 
     Returns
     -------
     None
         The function saves predictions and targets to disk if save_arrays=True, and prints MSE metrics
         for different reflectivity ranges (0-20, 20-35, 35-45, 45-100 dBZ).
+        MSE metrics are saved in run_dir/results/ as JSON file.
     """
     # Set default values if None
     if hidden_channels is None:
@@ -461,6 +466,13 @@ def predict_test_set(
     ckpt    = run_dir / ("best_val.pt" if which=="best" else "latest.pt")
     stats   = np.load(run_dir/"minmax_stats.npz")
     maxv    = float(stats['maxv']); eps=1e-6
+    
+    # Determine where to save predictions
+    if predictions_dir is None:
+        predictions_dir = run_dir
+    else:
+        predictions_dir = Path(predictions_dir)
+        predictions_dir.mkdir(parents=True, exist_ok=True)
 
     # Use memory-mapped loading for large datasets
     cube = np.load(npy_path, mmap_mode='r')
@@ -487,8 +499,8 @@ def predict_test_set(
 
     N = len(test_ds)
     if save_arrays:
-        preds_memmap = np.memmap(run_dir/"test_preds_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
-        gts_memmap   = np.memmap(run_dir/"test_targets_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
+        preds_memmap = np.memmap(predictions_dir/"test_preds_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
+        gts_memmap   = np.memmap(predictions_dir/"test_targets_dBZ.npy", dtype='float32', mode='w+', shape=(N, C, H, W))
     else:
         preds_memmap = None
         gts_memmap = None
@@ -536,8 +548,8 @@ def predict_test_set(
             'shape': (N, C, H, W),
             'dtype': 'float32'
         }
-        np.savez(run_dir/"test_preds_dBZ_meta.npz", **meta)
-        np.savez(run_dir/"test_targets_dBZ_meta.npz", **meta)
+        np.savez(predictions_dir/"test_preds_dBZ_meta.npz", **meta)
+        np.savez(predictions_dir/"test_targets_dBZ_meta.npz", **meta)
 
     # Finalize MSE by range
     mse_by_range = {}
@@ -547,13 +559,21 @@ def predict_test_set(
             mse_by_range[key] = mse_sums[key] / mse_counts[key]
         else:
             mse_by_range[key] = np.nan
-    # Save MSE metrics
-    np.savez(run_dir/"mse_by_range.npz", **mse_by_range)
+    # Create results directory in run_dir and save MSE metrics there
+    results_dir = run_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    
+    # Save MSE metrics as JSON 
+    import json
+    with open(results_dir / "mse_by_ranges.json", "w") as f:
+        json.dump(mse_by_range, f, indent=2)
+    
     print("MSE by reflectivity range:")
     for range_name, mse in mse_by_range.items():
         print(f"{range_name}: {mse:.4f}")
     if save_arrays:
-        print("Saved test_preds_dBZ.npy + test_targets_dBZ.npy →", run_dir)
+        print(f"Saved test_preds_dBZ.npy + test_targets_dBZ.npy → {predictions_dir}")
+        print(f"Saved mse_by_ranges.json → {results_dir}")
     print("Validation complete.")
     return None
 
@@ -668,6 +688,7 @@ if __name__ == "__main__":
     test_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
     test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
     test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
+    test_parser.add_argument("--predictions_dir", type=str, default=None, help="Directory to save large prediction/target files (default: same as run_dir)")
 
     args = parser.parse_args()
 
@@ -770,5 +791,6 @@ if __name__ == "__main__":
             which=args.which,
             device=args.device,
             save_arrays=args.save_arrays,
+            predictions_dir=args.predictions_dir,
         )
 

@@ -285,7 +285,8 @@ def predict_test_set(
     kernel_size: int = 3,
     which: str = "best",
     device: str = None,
-    save_arrays: bool = True
+    save_arrays: bool = True,
+    predictions_dir: str = None,
 ):
     """
     Run inference on the test set using a ConvLSTM model from train_radar_model.
@@ -313,7 +314,10 @@ def predict_test_set(
     device : str, optional
         Device to run inference on (default: 'cpu').
     save_arrays : bool, optional
-        Whether to save predictions and targets as .npy files in run_dir (default: True).
+        Whether to save predictions and targets as .npy files (default: True).
+    predictions_dir : str, optional
+        Directory to save large prediction/target files (default: same as run_dir).
+        If None, files are saved in run_dir. If specified, creates the directory if it doesn't exist.
 
     Returns
     -------
@@ -321,11 +325,19 @@ def predict_test_set(
         Array of shape (N, C, H, W) containing predicted radar reflectivity values.
     tgt_all : np.ndarray
         Array of shape (N, C, H, W) containing ground truth radar reflectivity values.
+        MSE metrics are saved in run_dir/results/ as JSON file.
     """
 
     device = device or "cpu"
     run_dir = Path(run_dir)
     ckpt    = run_dir / ("best_val.pt" if which=="best" else "latest.pt")
+
+    # Determine where to save predictions
+    if predictions_dir is None:
+        predictions_dir = run_dir
+    else:
+        predictions_dir = Path(predictions_dir)
+        predictions_dir.mkdir(parents=True, exist_ok=True)
 
     cube = np.load(npy_path); cube[cube<0]=0
 
@@ -365,16 +377,21 @@ def predict_test_set(
     ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
     mse_by_range = compute_mse_by_ranges(pred_all, tgt_all, ranges)
     
-    # Save MSE metrics
-    np.savez(run_dir/"mse_by_range.npz", **mse_by_range)
+    # Save MSE metrics as JSON in results dir
+    results_dir = run_dir / "results"
+    results_dir.mkdir(exist_ok=True)
+    import json
+    with open(results_dir / "mse_by_ranges.json", "w") as f:
+        json.dump(mse_by_range, f, indent=2)
     print("MSE by reflectivity range:")
     for range_name, mse in mse_by_range.items():
         print(f"{range_name}: {mse:.4f}")
     
     if save_arrays:
-        np.save(run_dir/"test_preds_dBZ.npy",   pred_all)
-        np.save(run_dir/"test_targets_dBZ.npy", tgt_all)
-        print("Saved test_preds_dBZ.npy + test_targets_dBZ.npy →", run_dir)
+        np.save(predictions_dir/"test_preds_dBZ.npy",   pred_all)
+        np.save(predictions_dir/"test_targets_dBZ.npy", tgt_all)
+        print(f"Saved test_preds_dBZ.npy + test_targets_dBZ.npy → {predictions_dir}")
+        print(f"Saved mse_by_ranges.json → {results_dir}")
 
     return pred_all, tgt_all
 
@@ -421,6 +438,7 @@ if __name__ == "__main__":
     test_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
     test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
     test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
+    test_parser.add_argument("--predictions_dir", type=str, default=None, help="Directory to save large prediction/target files (default: same as run_dir)")
 
     args = parser.parse_args()
 
@@ -478,4 +496,5 @@ if __name__ == "__main__":
             which=args.which,
             device=args.device,
             save_arrays=args.save_arrays,
+            predictions_dir=args.predictions_dir,
         )
