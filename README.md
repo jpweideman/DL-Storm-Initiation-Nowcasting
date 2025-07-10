@@ -9,6 +9,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 - `src/data/` — Data processing scripts. See [src/data/README.md](src/data/README.md).
 - `src/models/` — Model architecture definitions. See [src/models/README.md](src/models/README.md).
 - `src/training/` — Training scripts for different models. See [src/training/README.md](src/training/README.md).
+- `src/utils/` — Utility scripts for evaluation and analysis. See [src/utils/README.md](src/utils/README.md).
 - `experiments/runs/` — Each training run saves checkpoints, args, and results here.
 - `experiments/wandb/` — [Weights & Biases](https://wandb.ai/) experiment logs (if enabled during training).
 

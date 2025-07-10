@@ -9,3 +9,4 @@ runs_old/
 wandb_old/
 *.ipynb
 old_scripts/
+!notebooks/*.ipynb
