@@ -9,8 +9,8 @@ This folder organizes all experiment outputs for training, evaluation, and track
   - Contains:
     - Model checkpoints
     - `args.json` (CLI arguments for reproducibility)
-    - `results/` (evaluation metrics, plots, etc.)
-    - Any other run-specific outputs
+    - `results/` (evaluation metrics etc.)
+    - Other run-specific outputs
 
 - **wandb/**
   - Contains [Weights & Biases](https://wandb.ai/) logs for experiment tracking (if enabled).

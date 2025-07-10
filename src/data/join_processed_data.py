@@ -9,7 +9,7 @@ all_filenames = []
 # First, collect all relevant directories for progress bar
 join_targets = []   
 #for root, dirs, files in os.walk('Data'):           # for data in remote directory
-for root, dirs, files in os.walk('/tmp/Data'):      # for data in local directory
+for root, dirs, files in os.walk('data/intermediate'):      # for data in intermediate directory
     dirs.sort(key=lambda x: int(x) if x.isdigit() else x)
     files.sort()
     if 'data.npy' in files and 'filenames.json' in files:
@@ -25,7 +25,7 @@ for root in join_targets:
     total_samples += arr.shape[0]
 
 # Ensure output directory exists
-os.makedirs('data', exist_ok=True)
+os.makedirs('data/processed', exist_ok=True)
 
 # Pre-allocate memmap array for output
 out_path = 'data/processed/ZH_radar_dataset.npy'

@@ -1,0 +1,12 @@
+{
+  "correct": 0,
+  "early": 0,
+  "late": 0,
+  "false_positives": 0,
+  "total_true": 1,
+  "total_pred": 0,
+  "correct_over_true": 0.0,
+  "correct_over_pred": 0.0,
+  "anytime_ratio": 0.0,
+  "false_positive_ratio": 0.0
+}

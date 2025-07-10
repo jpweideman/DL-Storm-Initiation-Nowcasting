@@ -1,6 +1,7 @@
 import sys
 from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
+# Add the project root directory to Python path
+sys.path.append(str(Path(__file__).parent.parent.parent))
 
 import numpy as np, torch, torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, Subset
@@ -117,7 +118,6 @@ def train_radar_model(
         Weights & Biases project name for experiment tracking.
     early_stopping_patience : int, optional
         Number of epochs with no improvement before early stopping (default: 10).
-    args : Namespace object from argparse. If args.no_wandb is True, wandb logging is disabled.
 
     Returns
     -------

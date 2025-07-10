@@ -1,6 +1,6 @@
 # Radar Precipitation Nowcasting Pipeline
 
-This repository provides a modular, reproducible pipeline for radar-based precipitation nowcasting using deep learning models. 
+This repository provides a pipeline for radar precipitation nowcasting of storm initiations using deep learning models. 
 
 ## Folder Structure
 
@@ -15,36 +15,78 @@ This repository provides a modular, reproducible pipeline for radar-based precip
 ## Quickstart: End-to-End Example
 
 1. **Prepare Data**
-   - Place your raw `.h5` radar files in `data/raw/` (an example dataset is already provided).
+   - Place your raw `.h5` radar files in `data/raw/` (a small one day example dataset is already provided).
 
 2. **Process Data**
-   - Run a data processing script to convert raw data to `.npy` in `data/processed/`:
+   - Step 1: Process raw data into intermediate chunks:
      ```bash
-     python src/data/data_processing.py --input_dir data/raw/ --output_dir data/processed/
-     # or see src/data/README.md for other scripts and options
+     python src/data/data_processing.py
+     ```
+   - Step 2: Join intermediate chunks into final training files:
+     ```bash
+     python src/data/join_processed_data.py
      ```
 
 3. **Train a Model**
-   - Run a training script (e.g., UNet 3D CNN):
+   - Train a UNet 3D CNN model on the processed example dataset:
      ```bash
-     python src/training/train_unet_3D_cnn.py --data_dir data/processed/ --run_dir experiments/runs/unet3d_example
-     # Add other CLI arguments as needed (see src/training/README.md)
+     python src/training/train_unet_3D_cnn.py train \
+       --save_dir experiments/runs/unet3dcnn_example \
+       --base_ch 64 \
+       --bottleneck_dims "(32,)" \
+       --kernel_size 3 \
+       --npy_path data/processed/ZH_radar_dataset.npy \
+       --seq_len_in 10 \
+       --seq_len_out 1 \
+       --batch_size 4 \
+       --epochs 15 \
+       --device cpu \
+       --loss_name weighted_mse \
+       --train_val_test_split "(0.6,0.2,0.2)" \
+       --early_stopping_patience 10 \
+       --no_wandb
      ```
    - Arguments used for the run are saved as `args.json` in the run directory.
 
-4. **Evaluate & Save Results**
-   - Evaluation results  are saved in `results/` inside the run directory.
+4. **Test a Model**
+   - Run testing on the test set using the trained UNet 3D CNN model:
+     ```bash
+     python src/training/train_unet_3D_cnn.py test \
+       --npy_path data/processed/ZH_radar_dataset.npy \
+       --run_dir experiments/runs/unet3dcnn_example \
+       --seq_len_in 10 \
+       --seq_len_out 1 \
+       --train_val_test_split "(0.6,0.2,0.2)" \
+       --batch_size 4 \
+       --base_ch 64 \
+       --bottleneck_dims "(32,)" \
+       --kernel_size 3 \
+       --which best \
+       --device cpu \
+       --save_arrays True \
+       --predictions_dir predictions/unet3dcnn_example
+     ```
    - Large prediction/target files can be saved elsewhere using `--predictions_dir`.
+   - Evaluation results are saved in `results/` inside the run directory.
+   
+5. **Evaluate Storm Initiation Predictions**
+   - Use the storm_utils script to evaluate new storm initiations:
+     ```bash
+     python src/utils/storm_utils.py \
+       --preds predictions/unet3dcnn_example/test_preds_dBZ.npy \
+       --targets predictions/unet3dcnn_example/test_targets_dBZ.npy \
+       --out experiments/runs/unet3dcnn_example/results/storm_eval.json \
+       --reflectivity_threshold 45 \
+       --area_threshold 15 \
+       --dilation_iterations 5 \
+       --overlap_threshold 0.2
+     ```
+   - This will save a JSON file with evaluation metrics for storm initiations.
 
-5. **Track Experiments**
+6. **Track Experiments**
    - If using Weights & Biases, logs are saved in `experiments/wandb/`.
 
-<!-- ## More Information
-- See [src/data/README.md](src/data/README.md) for data processing details.
-- See [src/training/README.md](src/training/README.md) for training and evaluation script usage.
-- See [src/models/README.md](src/models/README.md) for available model architectures.
-- See [data/README.md](data/README.md) for data folder explanations.
-- See [experiments/README.md](experiments/README.md) for experiment output structure. -->
+
 
 
 

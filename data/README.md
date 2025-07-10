@@ -1,22 +1,34 @@
 # Data Folder Structure
 
-This folder contains all data used in the pipeline, organized for clarity and reproducibility.
+This folder contains all data used in the pipeline.
 
 ## Folders
 
 - **raw/**
   - Place your original, unmodified radar data files here (e.g., `.h5` files).
   - These files are never overwritten or modified by scripts.
-  - Example: `data/raw/scan-sidpol-120km-*.h5`
+  - Example: `data/raw/2024/08/14/scan-sidpol-120km-*.h5`
+
+- **intermediate/**
+  - Contains intermediate processed data chunks generated from raw data.
+  - Each subdirectory mirrors the structure of `raw/` and contains:
+    - `data.npy` - Processed radar data chunks
+    - `filenames.json` - Corresponding original filenames
+  - This folder is used for memory-efficient processing of large datasets.
+  - Example: `data/intermediate/2024/08/14/data.npy`
 
 - **processed/**
-  - Contains all processed data files generated from the raw data (e.g., `.npy`, `.json`).
-  - All training and evaluation scripts use files from this folder by default.
-  - Example: `data/processed/ZH_radar_dataset_small.npy`, `ZH_radar_filenames.json`
+  - Contains final training-ready data files.
+  - These are the files used by all training and evaluation scripts.
+  - Clean, single large files for efficient training.
+  - Example: `data/processed/ZH_radar_dataset.npy`, `ZH_radar_filenames.json`
 
 ## Data Flow
-1. Place raw files in `data/raw/`.
-2. Run a script from `src/data/` to generate processed files in `data/processed/`.
-3. Use processed files for training and evaluation.
 
-See [src/data/README.md](../src/data/README.md) for details on processing scripts. 
+1. **Raw Data**: Place raw `.h5` files in `data/raw/` (organized by year/month)
+2. **Intermediate Processing**: Run `src/data/data_processing.py` to create chunks in `data/intermediate/`
+3. **Final Joining**: Run `src/data/join_processed_data.py` to create final files in `data/processed/`
+4. **Training**: Use files from `data/processed/` for model training and evaluation
+
+
+See [src/data/README.md](../src/data/README.md) for detailed processing script documentation. 
