@@ -146,6 +146,7 @@ def atomic_save(obj, path):
 def train_radar_model(
     npy_path: str,
     save_dir: str,
+    args,
     *,
     seq_len_in: int = 10,
     seq_len_out: int = 1,
@@ -169,7 +170,9 @@ def train_radar_model(
     early_stopping_patience: int = 10,
 ):
     """
-    Train a ConvLSTM radar forecasting model.
+    Train a U-Net ConvLSTM radar forecasting model.
+
+    Pass the --no_wandb argument to disable wandb logging during training.
 
     Parameters
     ----------
@@ -308,35 +311,36 @@ def train_radar_model(
     end_epoch = start_ep + epochs - 1
 
     # wandb
-    run_id = save_dir.name
-    wandb.init(
-        project=wandb_project,
-        name=run_id,
-        id=run_id,
-        resume="allow",
-        dir="experiments/wandb",
-        config={
-            'seq_len_in': seq_len_in,
-            'train_frac': train_frac,
-            'batch_size': batch_size,
-            'lr': lr,
-            'kernel': kernel,
-            'epochs': epochs,
-            'device': device,
-            'loss_name': loss_name,
-            'loss_weight_thresh': loss_weight_thresh,
-            'loss_weight_high': loss_weight_high,
-            'patch_size': patch_size,
-            'patch_stride': patch_stride,
-            'patch_thresh': patch_thresh,
-            'patch_frac': patch_frac,
-            'use_patches': use_patches,
-            'base_ch': base_ch,
-            'lstm_hid': lstm_hid,
-            'early_stopping_patience': early_stopping_patience
-        }
-    )
-    wandb.watch(model)
+    if not args.no_wandb:
+        run_id = save_dir.name
+        wandb.init(
+            project=wandb_project,
+            name=run_id,
+            id=run_id,
+            resume="allow",
+            dir="experiments/wandb",
+            config={
+                'seq_len_in': seq_len_in,
+                'train_frac': train_frac,
+                'batch_size': batch_size,
+                'lr': lr,
+                'kernel': kernel,
+                'epochs': epochs,
+                'device': device,
+                'loss_name': loss_name,
+                'loss_weight_thresh': loss_weight_thresh,
+                'loss_weight_high': loss_weight_high,
+                'patch_size': patch_size,
+                'patch_stride': patch_stride,
+                'patch_thresh': patch_thresh,
+                'patch_frac': patch_frac,
+                'use_patches': use_patches,
+                'base_ch': base_ch,
+                'lstm_hid': lstm_hid,
+                'early_stopping_patience': early_stopping_patience
+            }
+        )
+        wandb.watch(model)
 
     # training loop
     def run_epoch(dl, train=True):
@@ -360,7 +364,8 @@ def train_radar_model(
         tr = run_epoch(train_dl, True)
         vl = run_epoch(val_dl,   False)
         print(f"[{ep:02d}/{end_epoch}] train {tr:.4f} | val {vl:.4f}")
-        wandb.log({'epoch':ep,'train_loss':tr,'val_loss':vl})
+        if not args.no_wandb:
+            wandb.log({'epoch':ep,'train_loss':tr,'val_loss':vl})
         atomic_save({'epoch':ep,'model':model.state_dict(),
                     'optim':optimizer.state_dict(),'best_val':best_val},
                    ckpt_latest)
@@ -368,7 +373,8 @@ def train_radar_model(
             best_val = vl
             atomic_save(model.state_dict(), ckpt_best)
             print("New best saved")
-            wandb.log({'best_val_loss':best_val})
+            if not args.no_wandb:
+                wandb.log({'best_val_loss':best_val})
             epochs_since_improvement = 0
         else:
             epochs_since_improvement += 1
@@ -378,7 +384,8 @@ def train_radar_model(
             break
 
     print("Done. Checkpoints in", save_dir.resolve())
-    wandb.finish()
+    if not args.no_wandb:
+        wandb.finish()
 
 
 def compute_mse_by_ranges(pred, target, ranges):
@@ -612,6 +619,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net (default: 32)")
     train_parser.add_argument("--lstm_hid", type=str, default="64", help="Number of hidden channels in the ConvLSTM bottleneck (int or tuple/list, e.g., 64 or (64,128))")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
+    train_parser.add_argument("--no_wandb", action="store_true", help="Disable wandb logging")
     train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")
 
     # Subparser for test
@@ -661,6 +669,7 @@ if __name__ == "__main__":
         train_radar_model(
             npy_path=args.npy_path,
             save_dir=args.save_dir,
+            args=args,
             seq_len_in=args.seq_len_in,
             seq_len_out=args.seq_len_out,
             train_val_test_split=train_val_test_split,
