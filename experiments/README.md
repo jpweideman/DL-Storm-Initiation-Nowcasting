@@ -16,7 +16,8 @@ This folder organizes all experiment outputs for training, evaluation, and track
   - Contains [Weights & Biases](https://wandb.ai/) logs for experiment tracking (if enabled).
 
 ## Usage
-- Specify `--run_dir` when running a training script to create a new run directory.
+- **Important:** To follow the intended structure of this repository, you must ensure that the `--save_dir` (for training) and `--run_dir` (for training/testing) arguments point to a subdirectory of `experiments/runs/`.
+    - Example: `--save_dir experiments/runs/my_experiment` and `--run_dir experiments/runs/my_experiment`
 - All results and checkpoints for that run will be saved in the specified folder.
 - Use `--predictions_dir` to save large prediction/target files elsewhere if needed.
 

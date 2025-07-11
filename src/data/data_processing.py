@@ -61,11 +61,11 @@ for root, dirs, files in os.walk(data_dir):
     rel_filenames = []
     for fname in tqdm(sorted(h5_files), desc=f"Processing {rel_dir}"):
         fpath = os.path.join(root, fname)
-        try:
+    try:
             tensor = process_one_file(fpath)
             tensors.append(tensor)
             rel_filenames.append(os.path.relpath(fpath, data_dir))
-        except Exception as e:
+    except Exception as e:
             print(f"Error processing {fpath}: {e}")
     if tensors:
         np.save(out_npy, np.stack(tensors))

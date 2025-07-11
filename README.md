@@ -72,7 +72,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
    
 5. **Evaluate Storm Initiation Predictions**
    - Use the storm_utils script to evaluate new storm initiations:
-     ```bash
+```bash
      python src/utils/storm_utils.py \
        --preds predictions/unet3dcnn_example/test_preds_dBZ.npy \
        --targets predictions/unet3dcnn_example/test_targets_dBZ.npy \

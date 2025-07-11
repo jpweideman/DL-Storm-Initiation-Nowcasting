@@ -194,7 +194,8 @@ def train_radar_model(
             dir="experiments/wandb",
             config={
                 'seq_len_in': seq_len_in,
-                'train_frac': train_frac,
+                'seq_len_out': seq_len_out,
+                'train_val_test_split': train_val_test_split,
                 'batch_size': batch_size,
                 'lr': lr,
                 'hidden_dims': hidden_dims,
@@ -204,6 +205,7 @@ def train_radar_model(
                 'loss_name': loss_name,
                 'loss_weight_thresh': loss_weight_thresh,
                 'loss_weight_high': loss_weight_high,
+                'wandb_project': wandb_project,
                 'early_stopping_patience': early_stopping_patience
             }
         )

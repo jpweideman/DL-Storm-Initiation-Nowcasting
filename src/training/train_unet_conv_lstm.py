@@ -322,7 +322,8 @@ def train_radar_model(
             dir="experiments/wandb",
             config={
                 'seq_len_in': seq_len_in,
-                'train_frac': train_frac,
+                'seq_len_out': seq_len_out,
+                'train_val_test_split': train_val_test_split,
                 'batch_size': batch_size,
                 'lr': lr,
                 'kernel': kernel,
@@ -338,6 +339,7 @@ def train_radar_model(
                 'use_patches': use_patches,
                 'base_ch': base_ch,
                 'lstm_hid': lstm_hid,
+                'wandb_project': wandb_project,
                 'early_stopping_patience': early_stopping_patience
             }
         )
