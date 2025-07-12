@@ -466,10 +466,10 @@ if __name__ == "__main__":
 
     train_val_test_split = ast.literal_eval(args.train_val_test_split)
     if args.command == "train":
-        # Save arguments to save_dir/args.json
+        # Save arguments to save_dir/train_args.json
         import json, os
         os.makedirs(args.save_dir, exist_ok=True)
-        with open(os.path.join(args.save_dir, "args.json"), "w") as f:
+        with open(os.path.join(args.save_dir, "train_args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
         train_radar_model(
             npy_path=args.npy_path,
@@ -491,10 +491,10 @@ if __name__ == "__main__":
             early_stopping_patience=args.early_stopping_patience,
         )
     elif args.command == "test":
-        # Save arguments to run_dir/args.json
+        # Save arguments to run_dir/test_args.json
         import json, os
         os.makedirs(args.run_dir, exist_ok=True)
-        with open(os.path.join(args.run_dir, "args.json"), "w") as f:
+        with open(os.path.join(args.run_dir, "test_args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
         predict_test_set(
             npy_path=args.npy_path,

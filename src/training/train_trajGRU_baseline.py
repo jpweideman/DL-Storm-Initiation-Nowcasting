@@ -754,7 +754,7 @@ if __name__ == "__main__":
         train_val_test_split = ast.literal_eval(args.train_val_test_split)
         # Create save directory and save arguments
         os.makedirs(args.save_dir, exist_ok=True)
-        with open(os.path.join(args.save_dir, "args.json"), "w") as f:
+        with open(os.path.join(args.save_dir, "train_args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
         # Convert use_patches string to boolean
         if isinstance(args.use_patches, str):
@@ -805,7 +805,7 @@ if __name__ == "__main__":
         import json, os
         train_val_test_split = ast.literal_eval(args.train_val_test_split)
         os.makedirs(args.run_dir, exist_ok=True)
-        with open(os.path.join(args.run_dir, "args.json"), "w") as f:
+        with open(os.path.join(args.run_dir, "test_args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
         hidden_channels = parse_int_list(args.hidden_channels)
         kernel_size = parse_int_list(args.kernel_size)
