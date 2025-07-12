@@ -8,6 +8,7 @@ This folder contains utility functions for storm detection, animation, and evalu
 - **Animation**: Visualize storms and new storm formations over time.
 - **Evaluation**: Quantitatively compare predicted and true storm initiations.
 - **CLI**: Command-line interface for evaluating predictions and saving results as JSON.
+- **Section Analysis**: Count storms and new storms in data sections for temporal analysis.
 
 ## CLI Usage: Evaluate Storm Initiation Predictions
 
@@ -32,6 +33,33 @@ python src/utils/storm_utils.py \
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
 - `--overlap_threshold`: Overlap ratio for matching storms (default: 0.2)
 
+## CLI Usage: Count Storms by Data Sections
+
+Analyze storm and new storm counts across temporal sections of radar data:
+
+```bash
+python src/utils/storm_section_counter.py \
+  --npy_path data/processed/ZH_radar_dataset.npy \
+  --interval_percent 5 \
+  --batch_size 10 \
+  --reflectivity_threshold 45 \
+  --area_threshold 15 \
+  --dilation_iterations 5 \
+  --overlap_threshold 0.1 \
+  --out results/storm_section_counts.json
+```
+
+- `--npy_path`: Path to radar data `.npy` file (shape: T, H, W or N, C, H, W)
+- `--interval_percent`: Section size as percentage of total data length (default: 5)
+- `--batch_size`: Number of frames to process at once for memory efficiency (default: 10)
+- `--reflectivity_threshold`: dBZ threshold for storm detection (default: 45)
+- `--area_threshold`: Minimum storm area in pixels (default: 15)
+- `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
+- `--overlap_threshold`: Overlap threshold for new storm detection (default: 0.1)
+- `--out`: Optional output JSON file for results
+
+**Output**: JSON file with storm and new storm counts for each temporal section, useful for analyzing temporal patterns in storm activity.
+
 ## Main Python Functions
 
 - `detect_storms(data, reflectivity_threshold, area_threshold, dilation_iterations)`
@@ -42,6 +70,8 @@ python src/utils/storm_utils.py \
   - Compares predicted and true new storm initiations, returns metrics.
 - `animate_storms(data, ...)` and `animate_new_storms(data, new_storms_result)`
   - Create matplotlib animations of storms and new storm initiations.
+- `count_storms_by_section(data, interval_percent, batch_size, ...)`
+  - Count storms and new storms in temporal sections of data.
 
 ## Example (Python API)
 
@@ -64,6 +94,10 @@ target_new_storms = storm_utils.detect_new_storm_formations(targets)
 # Evaluate
 metrics = storm_utils.evaluate_new_storm_predictions(pred_new_storms, target_new_storms)
 print(metrics)
+
+# Count storms by sections
+section_counts = storm_utils.count_storms_by_section(targets, interval_percent=5)
+print(f"Found {len(section_counts)} sections with storm activity")
 ```
 
-See the function docstrings in `storm_utils.py` for more details and advanced options. 
+See the function docstrings in `storm_utils.py` and `storm_section_counter.py` for more details and advanced options. 
