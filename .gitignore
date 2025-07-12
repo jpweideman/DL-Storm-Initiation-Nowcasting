@@ -3,6 +3,7 @@ data/intermediate/
 predictions/
 __pycache__/
 experiments/wandb/
+.DS_Store
 
 # runs/
 # wandb/
