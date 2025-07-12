@@ -4,13 +4,13 @@
   "run_dir": "experiments/runs/unet3dcnn_example",
   "seq_len_in": 10,
   "seq_len_out": 1,
-  "train_val_test_split": "(0.6,0.2,0.2)",
+  "train_val_test_split": "(0.5,0.1,0.4)",
   "batch_size": 4,
   "base_ch": 64,
   "bottleneck_dims": "(32,)",
   "kernel_size": 3,
   "which": "best",
-  "device": "cpu",
+  "device": "cuda",
   "save_arrays": true,
   "predictions_dir": "predictions/unet3dcnn_example"
 }

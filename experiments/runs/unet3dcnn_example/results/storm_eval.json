@@ -1,12 +1,12 @@
 {
-  "correct": 0,
+  "correct": 9,
   "early": 0,
-  "late": 0,
-  "false_positives": 0,
-  "total_true": 1,
-  "total_pred": 0,
-  "correct_over_true": 0.0,
-  "correct_over_pred": 0.0,
-  "anytime_ratio": 0.0,
-  "false_positive_ratio": 0.0
+  "late": 4,
+  "false_positives": 7,
+  "total_true": 19,
+  "total_pred": 20,
+  "correct_over_true": 0.47368421052631576,
+  "correct_over_pred": 0.45,
+  "anytime_ratio": 0.6842105263157895,
+  "false_positive_ratio": 0.35
 }
