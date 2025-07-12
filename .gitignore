@@ -2,6 +2,7 @@ data/processed/
 data/intermediate/
 predictions/
 __pycache__/
+experiments/wandb/
 
 # runs/
 # wandb/

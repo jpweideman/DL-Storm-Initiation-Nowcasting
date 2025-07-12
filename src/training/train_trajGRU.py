@@ -288,11 +288,11 @@ def train_radar_model(
             name=run_id,
             id=run_id,
             resume="allow",
-                dir="experiments/wandb",
+            dir="experiments/wandb",
             config={
                 'seq_len_in': seq_len_in,
-                    'seq_len_out': seq_len_out,
-                    'train_val_test_split': train_val_test_split,
+                'seq_len_out': seq_len_out,
+                'train_val_test_split': train_val_test_split,
                 'batch_size': batch_size,
                 'lr': lr,
                 'hidden_channels': hidden_channels,
@@ -308,7 +308,7 @@ def train_radar_model(
                 'patch_thresh': patch_thresh,
                 'patch_frac': patch_frac,
                 'use_patches': use_patches,
-                    'wandb_project': wandb_project,
+                'wandb_project': wandb_project,
                 'early_stopping_patience': early_stopping_patience
             }
         )

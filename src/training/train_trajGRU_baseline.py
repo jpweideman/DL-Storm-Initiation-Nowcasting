@@ -528,8 +528,13 @@ def predict_test_set(
     dl      = DataLoader(test_ds, batch_size, shuffle=False)
 
     # Model construction
+    st = torch.load(ckpt, map_location=device)
+    if isinstance(st, dict) and 'model' in st:
+        st=st['model']
+    
+    # Use the same input channels as the data (consistent with other scripts)
     model = TrajGRUEncoderDecoder(
-        input_channels=C,  # Use actual number of channels from data
+        input_channels=C,  # Use current data channels
         hidden_channels=hidden_channels,
         kernel_size=kernel_size,
         L=L,
@@ -538,9 +543,7 @@ def predict_test_set(
         seq_len_in=seq_len_in,
         seq_len_out=seq_len_out
     ).to(device)
-    st = torch.load(ckpt, map_location=device)
-    if isinstance(st, dict) and 'model' in st:
-        st=st['model']
+    
     model.load_state_dict(st)
     model.to(device).eval()
 
@@ -562,13 +565,22 @@ def predict_test_set(
         for xb, yb in tqdm(dl, desc='Validating', total=len(dl)):
             xb = xb.to(device)
             xb = xb.permute(0, 2, 1, 3, 4)  # (B, C, D, H, W)
-            if yb.ndim == 4:
-                yb = yb.unsqueeze(2)
+            
+            # Handle target shape: yb should be (B, C, H, W) but might be (B, C, seq_len_out, H, W)
+            if yb.ndim == 5:  # (B, C, seq_len_out, H, W)
+                if yb.shape[2] == 1:  # seq_len_out == 1
+                    yb = yb.squeeze(2)  # Remove sequence dimension
+                else:
+                    raise ValueError(f"Expected seq_len_out=1, got {yb.shape[2]}")
+            
             out_n = model(xb)
-            if out_n.shape[2] == 1:
-                out_n = out_n.squeeze(2)
-            if yb.shape[2] == 1:
-                yb = yb.squeeze(2)
+            # Handle shape: model outputs (B, seq_len_out, C, H, W)
+            # We want (B, C, H, W) for single timestep prediction
+            if out_n.shape[1] == 1:  # seq_len_out == 1
+                out_n = out_n.squeeze(1)  # Remove sequence dimension
+            else:
+                raise ValueError(f"Expected seq_len_out=1, got {out_n.shape[1]}")
+                
             out_n = out_n.cpu().numpy()
             yb = yb.cpu().numpy()
             out_n_dBZ = out_n * (maxv+eps)
@@ -738,7 +750,12 @@ if __name__ == "__main__":
             raise ValueError(f"List must have 1 or {n} values, got {len(lst)}")
 
     if args.command == "train":
+        import json, os
         train_val_test_split = ast.literal_eval(args.train_val_test_split)
+        # Create save directory and save arguments
+        os.makedirs(args.save_dir, exist_ok=True)
+        with open(os.path.join(args.save_dir, "args.json"), "w") as f:
+            json.dump(vars(args), f, indent=2)
         # Convert use_patches string to boolean
         if isinstance(args.use_patches, str):
             if args.use_patches.lower() in ["true", "1", "yes"]:

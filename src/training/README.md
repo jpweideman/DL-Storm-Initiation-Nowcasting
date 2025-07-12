@@ -32,7 +32,7 @@ python src/training/train_unet_3D_cnn.py train \
 ```
 
 - All arguments used for the run are saved as `args.json` in the run directory for reproducibility.
-- Add `--no_wandb` to disable Weights & Biases logging (recommended for local or test runs).
+- Add `--no_wandb` to disable Weights & Biases logging.
 
 ## Example: Test a UNet 3D CNN Model
 

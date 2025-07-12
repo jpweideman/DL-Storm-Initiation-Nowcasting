@@ -1,0 +1,122 @@
+[
+  {
+    "section": 0,
+    "start": 0,
+    "end": 2629,
+    "storm_count": 778
+  },
+  {
+    "section": 1,
+    "start": 2629,
+    "end": 5258,
+    "storm_count": 335
+  },
+  {
+    "section": 2,
+    "start": 5258,
+    "end": 7887,
+    "storm_count": 975
+  },
+  {
+    "section": 3,
+    "start": 7887,
+    "end": 10516,
+    "storm_count": 925
+  },
+  {
+    "section": 4,
+    "start": 10516,
+    "end": 13145,
+    "storm_count": 1712
+  },
+  {
+    "section": 5,
+    "start": 13145,
+    "end": 15774,
+    "storm_count": 1970
+  },
+  {
+    "section": 6,
+    "start": 15774,
+    "end": 18403,
+    "storm_count": 1960
+  },
+  {
+    "section": 7,
+    "start": 18403,
+    "end": 21032,
+    "storm_count": 1387
+  },
+  {
+    "section": 8,
+    "start": 21032,
+    "end": 23661,
+    "storm_count": 1316
+  },
+  {
+    "section": 9,
+    "start": 23661,
+    "end": 26290,
+    "storm_count": 1935
+  },
+  {
+    "section": 10,
+    "start": 26290,
+    "end": 28919,
+    "storm_count": 906
+  },
+  {
+    "section": 11,
+    "start": 28919,
+    "end": 31548,
+    "storm_count": 568
+  },
+  {
+    "section": 12,
+    "start": 31548,
+    "end": 34177,
+    "storm_count": 2476
+  },
+  {
+    "section": 13,
+    "start": 34177,
+    "end": 36806,
+    "storm_count": 1067
+  },
+  {
+    "section": 14,
+    "start": 36806,
+    "end": 39435,
+    "storm_count": 1911
+  },
+  {
+    "section": 15,
+    "start": 39435,
+    "end": 42064,
+    "storm_count": 509
+  },
+  {
+    "section": 16,
+    "start": 42064,
+    "end": 44693,
+    "storm_count": 1672
+  },
+  {
+    "section": 17,
+    "start": 44693,
+    "end": 47322,
+    "storm_count": 1296
+  },
+  {
+    "section": 18,
+    "start": 47322,
+    "end": 49951,
+    "storm_count": 1023
+  },
+  {
+    "section": 19,
+    "start": 49951,
+    "end": 52566,
+    "storm_count": 380
+  }
+]
