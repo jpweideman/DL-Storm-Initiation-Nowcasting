@@ -22,6 +22,8 @@ def count_storms_by_section(data, interval_percent=5, batch_size=10, reflectivit
     n_sections = int(np.ceil(T / section_size))
     sections = []
     prev_section_masks = []  # For new storm detection across section boundaries
+    prev_batch_last_masks = []  # Track last frame masks from previous batch
+    
     for sec_idx, i in enumerate(tqdm(range(0, T, section_size), desc="Processing sections", total=n_sections)):
         start = i
         end = min(i + section_size, T)
@@ -32,7 +34,7 @@ def count_storms_by_section(data, interval_percent=5, batch_size=10, reflectivit
         batch_iter = range(start, end, batch_size)
         current_section_masks = []  # Collect masks from this section for next section
         
-        for batch_start in tqdm(batch_iter, desc=f"Section {sec_idx+1}/{n_sections} batches", leave=False):
+        for batch_idx, batch_start in enumerate(tqdm(batch_iter, desc=f"Section {sec_idx+1}/{n_sections} batches", leave=False)):
             batch_end = min(batch_start + batch_size, end)
             batch_data = data[batch_start:batch_end]
             if batch_data.ndim == 4:
@@ -42,9 +44,13 @@ def count_storms_by_section(data, interval_percent=5, batch_size=10, reflectivit
             storms = detect_storms(batch_data, reflectivity_threshold, area_threshold, dilation_iterations)
             total_storms += sum(frame["storm_count"] for frame in storms)
             
-            # Count new storms in this batch
-            if prev_section_masks and batch_start == start:
-                # First batch of section: check against previous section's masks
+            # Handle new storm detection
+            if batch_idx == 0 and sec_idx == 0:
+                # First batch of first section - use detect_new_storm_formations
+                new_storms = detect_new_storm_formations(batch_data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)
+                total_new_storms += sum(frame['new_storm_count'] for frame in new_storms)
+            elif batch_idx == 0 and sec_idx > 0:
+                # First batch of subsequent sections - check against previous section's masks
                 batch_new_storms = 0
                 for frame_result in storms:
                     new_count = 0
@@ -60,51 +66,37 @@ def count_storms_by_section(data, interval_percent=5, batch_size=10, reflectivit
                             new_count += 1
                     batch_new_storms += new_count
                 total_new_storms += batch_new_storms
+                
+                # For the rest of this batch, use detect_new_storm_formations
+                if len(batch_data) > 1:
+                    rest_new_storms = detect_new_storm_formations(batch_data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)
+                    total_new_storms += sum(frame['new_storm_count'] for frame in rest_new_storms[1:])  # Skip first frame as we already counted it
             else:
-                # Use detect_new_storm_formations for subsequent batches or first section
-                if batch_start == start and not prev_section_masks:
-                    # First section, first batch
-                    new_storms = detect_new_storm_formations(batch_data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)
-                else:
-                    # Subsequent batches: need to check against previous batch's masks
-                    if batch_start == start:
-                        # First batch of section but not first section
-                        # Create a dummy frame with previous masks for continuity
-                        dummy_data = np.zeros_like(batch_data[:1])
-                        combined_data = np.concatenate([dummy_data, batch_data], axis=0)
-                        new_storms = detect_new_storm_formations(combined_data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)
-                        # Remove the dummy frame count
-                        total_new_storms += sum(frame['new_storm_count'] for frame in new_storms[1:])
-                    else:
-                        # Regular batch: check against previous batch's masks
-                        # Get previous batch's masks
-                        prev_batch_start = batch_start - batch_size
-                        prev_batch_end = batch_start
-                        prev_batch_data = data[prev_batch_start:prev_batch_end]
-                        if prev_batch_data.ndim == 4:
-                            prev_batch_data = np.max(prev_batch_data, axis=1)
-                        prev_batch_storms = detect_storms(prev_batch_data, reflectivity_threshold, area_threshold, dilation_iterations)
-                        prev_batch_masks = []
-                        for frame_result in prev_batch_storms:
-                            prev_batch_masks.extend(frame_result['storm_masks'])
-                        
-                        # Check current batch against previous batch masks
-                        batch_new_storms = 0
-                        for frame_result in storms:
-                            new_count = 0
-                            current_masks = frame_result['storm_masks']
-                            for current in current_masks:
-                                is_new = True
-                                for prev in prev_batch_masks:
-                                    overlap = np.sum(current & prev) / np.sum(current)
-                                    if overlap > overlap_threshold:
-                                        is_new = False
-                                        break
-                                if is_new:
-                                    new_count += 1
-                            batch_new_storms += new_count
-                        total_new_storms += batch_new_storms
-                        continue  # Skip the else block below
+                # Subsequent batches - check first frame against previous batch's last frame
+                if prev_batch_last_masks and len(batch_data) > 0:
+                    first_frame_storms = detect_storms(batch_data[:1], reflectivity_threshold, area_threshold, dilation_iterations)
+                    if first_frame_storms:
+                        first_frame_masks = first_frame_storms[0]['storm_masks']
+                        first_frame_new_count = 0
+                        for current in first_frame_masks:
+                            is_new = True
+                            for prev in prev_batch_last_masks:
+                                overlap = np.sum(current & prev) / np.sum(current)
+                                if overlap > overlap_threshold:
+                                    is_new = False
+                                    break
+                            if is_new:
+                                first_frame_new_count += 1
+                        total_new_storms += first_frame_new_count
+                
+                # For the rest of this batch, use detect_new_storm_formations
+                if len(batch_data) > 1:
+                    rest_new_storms = detect_new_storm_formations(batch_data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)
+                    total_new_storms += sum(frame['new_storm_count'] for frame in rest_new_storms[1:])  # Skip first frame as we already counted it
+            
+            # Track the last frame's masks for next batch
+            if storms:
+                prev_batch_last_masks = storms[-1]['storm_masks']
             
             # Collect masks from this batch for next section
             for frame_result in storms:
@@ -114,7 +106,7 @@ def count_storms_by_section(data, interval_percent=5, batch_size=10, reflectivit
         prev_section_masks = current_section_masks
         
         sections.append({
-            "section": sec_idx+1,
+            "section": f"{sec_idx * interval_percent}%-{(sec_idx + 1) * interval_percent}%",
             "start": start,
             "end": end,
             "storm_count": total_storms,
@@ -149,7 +141,7 @@ def main():
     )
     print("\nStorm and new storm counts by section:")
     for section in results:
-        print(f"Section {section['section']}: Frames {section['start']}–{section['end']} → {section['storm_count']} storms, {section['new_storm_count']} new storms")
+        print(f"{section['section']}: Frames {section['start']}–{section['end']} → {section['storm_count']} storms, {section['new_storm_count']} new storms")
     if args.out:
         with open(args.out, 'w') as f:
             json.dump(results, f, indent=2)

@@ -278,36 +278,36 @@ def train_radar_model(
 
     # wandb
     if not args.no_wandb:
-        run_id = save_dir.name
-        wandb.init(
-            project=wandb_project,
-            name=run_id,
-            id=run_id,
-            resume="allow",
+    run_id = save_dir.name
+    wandb.init(
+        project=wandb_project,
+        name=run_id,
+        id=run_id,
+        resume="allow",
             dir="experiments/wandb",
-            config={
-                'seq_len_in': seq_len_in,
+        config={
+            'seq_len_in': seq_len_in,
                 'seq_len_out': seq_len_out,
                 'train_val_test_split': train_val_test_split,
-                'batch_size': batch_size,
-                'lr': lr,
-                'hidden_dims': hidden_dims,
-                'kernel_size': kernel_size,
-                'epochs': epochs,
-                'device': device,
-                'loss_name': loss_name,
-                'loss_weight_thresh': loss_weight_thresh,
-                'loss_weight_high': loss_weight_high,
-                'patch_size': patch_size,
-                'patch_stride': patch_stride,
-                'patch_thresh': patch_thresh,
-                'patch_frac': patch_frac,
+            'batch_size': batch_size,
+            'lr': lr,
+            'hidden_dims': hidden_dims,
+            'kernel_size': kernel_size,
+            'epochs': epochs,
+            'device': device,
+            'loss_name': loss_name,
+            'loss_weight_thresh': loss_weight_thresh,
+            'loss_weight_high': loss_weight_high,
+            'patch_size': patch_size,
+            'patch_stride': patch_stride,
+            'patch_thresh': patch_thresh,
+            'patch_frac': patch_frac,
                 'use_patches': use_patches,
                 'wandb_project': wandb_project,
                 'early_stopping_patience': early_stopping_patience
-            }
-        )
-        wandb.watch(model)
+        }
+    )
+    wandb.watch(model)
 
     # training loop
     def run_epoch(dl, train=True):
@@ -332,7 +332,7 @@ def train_radar_model(
         vl = run_epoch(val_dl,   False)
         print(f"[{ep:02d}/{end_epoch}] train {tr:.4f} | val {vl:.4f}")
         if not args.no_wandb:
-            wandb.log({'epoch':ep,'train_loss':tr,'val_loss':vl})
+        wandb.log({'epoch':ep,'train_loss':tr,'val_loss':vl})
         atomic_save({'epoch':ep,'model':model.state_dict(),
                     'optim':optimizer.state_dict(),'best_val':best_val},
                    ckpt_latest)
@@ -341,7 +341,7 @@ def train_radar_model(
             atomic_save(model.state_dict(), ckpt_best)
             print("New best saved")
             if not args.no_wandb:
-                wandb.log({'best_val_loss':best_val})
+            wandb.log({'best_val_loss':best_val})
             epochs_since_improvement = 0
         else:
             epochs_since_improvement += 1
@@ -352,7 +352,7 @@ def train_radar_model(
 
     print("Done. Checkpoints in", save_dir.resolve())
     if not args.no_wandb:
-        wandb.finish()
+    wandb.finish()
 
 def compute_mse_by_ranges(pred, target, ranges):
     """

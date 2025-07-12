@@ -27,7 +27,7 @@ python src/training/train_unet_3D_cnn.py train \
   --epochs 15 \
   --device cpu \
   --loss_name weighted_mse \
-  --train_val_test_split "(0.6,0.2,0.2)" \
+  --train_val_test_split "(0.5,0.1,0.4)" \
   --early_stopping_patience 10 \
   --no_wandb
 ```
@@ -43,7 +43,7 @@ python src/training/train_unet_3D_cnn.py test \
   --run_dir experiments/runs/unet3dcnn_example \
   --seq_len_in 10 \
   --seq_len_out 1 \
-  --train_val_test_split "(0.6,0.2,0.2)" \
+  --train_val_test_split "(0.5,0.1,0.4)" \
   --batch_size 4 \
   --base_ch 64 \
   --bottleneck_dims "(32,)" \

@@ -58,7 +58,7 @@ python src/utils/storm_section_counter.py \
 - `--overlap_threshold`: Overlap threshold for new storm detection (default: 0.1)
 - `--out`: Optional output JSON file for results
 
-**Output**: JSON file with storm and new storm counts for each temporal section, useful for analyzing temporal patterns in storm activity.
+**Output**: JSON file with storm and new storm counts for each temporal section. Useful for analyzing temporal patterns in storm activity and for determining training-validation-testing splits.
 
 ## Main Python Functions
 

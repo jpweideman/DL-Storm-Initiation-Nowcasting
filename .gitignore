@@ -13,5 +13,6 @@ wandb_old/
 old_scripts/
 runs/
 
+storm_*.json
 
 !notebooks/*.ipynb
