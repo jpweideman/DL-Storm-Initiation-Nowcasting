@@ -2,7 +2,7 @@ data/processed/
 data/intermediate/
 predictions/
 __pycache__/
-
+experiments/wandb/
 
 # runs/
 # wandb/
@@ -12,6 +12,6 @@ wandb_old/
 *.ipynb
 old_scripts/
 runs/
-experiments/wandb_old/
+
 
 !notebooks/*.ipynb
