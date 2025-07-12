@@ -2,6 +2,12 @@
 
 This folder contains utility functions for storm detection, animation, and evaluation in radar nowcasting experiments.
 
+## Structure and Organization
+
+- **storm_utils.py**: Core storm detection and evaluation functions (e.g., `detect_storms`, `detect_new_storm_formations`, `evaluate_new_storm_predictions`, `count_storms_by_section`).
+- **storm_animation_utils.py**: All animation and visualization functions (e.g., `animate_storms`, `animate_new_storms`, `animate_storms_polar`, `animate_storms_polar_comparison`).
+- **storm_section_counter.py**: Script for counting storms and new storms in temporal sections of data.
+
 ## Main Features
 
 - **Storm Detection**: Identify storms and new storm initiations in radar reflectivity data.
@@ -62,21 +68,29 @@ python src/utils/storm_section_counter.py \
 
 ## Main Python Functions
 
+### In `storm_utils.py` (detection & evaluation)
 - `detect_storms(data, reflectivity_threshold, area_threshold, dilation_iterations)`
   - Detects storms in each frame of radar data.
 - `detect_new_storm_formations(data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)`
   - Identifies new storm initiations over time.
 - `evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_threshold)`
   - Compares predicted and true new storm initiations, returns metrics.
-- `animate_storms(data, ...)` and `animate_new_storms(data, new_storms_result)`
-  - Create matplotlib animations of storms and new storm initiations.
 - `count_storms_by_section(data, interval_percent, batch_size, ...)`
   - Count storms and new storms in temporal sections of data.
+
+### In `storm_animation_utils.py` (visualization)
+- `animate_storms(data, ...)`
+  - Create matplotlib animation of storms over time.
+- `animate_new_storms(data, new_storms_result)`
+  - Animate new storm initiations over time.
+- `animate_storms_polar(data, ...)` and `animate_storms_polar_comparison(true_data, pred_data, ...)`
+  - Polar coordinate visualizations for advanced radar data.
 
 ## Example (Python API)
 
 ```python
 from src.utils import storm_utils
+from src.utils import storm_animation_utils
 
 # Load predictions and targets (N, C, H, W or N, H, W)
 preds = np.load('experiments/runs/unet3dcnn_example/test_preds_dBZ.npy')
@@ -98,6 +112,11 @@ print(metrics)
 # Count storms by sections
 section_counts = storm_utils.count_storms_by_section(targets, interval_percent=5)
 print(f"Found {len(section_counts)} sections with storm activity")
+
+# Animate storms (in a notebook)
+ani = storm_animation_utils.animate_storms(preds)
+from IPython.display import HTML
+display(HTML(ani.to_jshtml()))
 ```
 
-See the function docstrings in `storm_utils.py` and `storm_section_counter.py` for more details and advanced options. 
+See the function docstrings in `storm_utils.py`, `storm_animation_utils.py`, and `storm_section_counter.py` for more details and advanced options. 
