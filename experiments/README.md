@@ -14,6 +14,7 @@ This folder organizes all experiment outputs for training, evaluation, and track
 
 - **wandb/**
   - Contains [Weights & Biases](https://wandb.ai/) logs for experiment tracking (if enabled).
+  - **Note:** This folder is in `.gitignore` to prevent large log files from being committed to the repository, but wandb logs will be stored locally on your device during training.
 
 ## Usage
 - **Important:** To follow the intended structure of this repository, you must ensure that the `--save_dir` (for training) and `--run_dir` (for training/testing) arguments point to a subdirectory of `experiments/runs/`.
