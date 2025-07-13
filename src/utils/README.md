@@ -83,7 +83,7 @@ python src/utils/storm_section_counter.py \
 - `animate_storms_polar(data, ...)` and `animate_storms_polar_comparison(true_data, pred_data, ...)`
   - Polar coordinate visualizations for radar data.
 
-## Example (Python API)
+## Example Notebook Code
 
 ```python
 from src.utils import storm_utils
