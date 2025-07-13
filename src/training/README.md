@@ -82,18 +82,15 @@ python src/training/train_unet_3D_cnn.py train \
   --patch_frac 0.05
 ```
 
-**Why use patch-based training?**
+Patch-based training is highly recommended for radar nowcasting of storm initiation.
 
-- **Efficiency:** Training on patches allows the model to see more diverse and localized weather events per epoch, improving data efficiency and convergence speed.
 - **Focus on storms:** By extracting only patches with a significant fraction of high-reflectivity pixels, the model focuses on learning from regions with active weather (e.g., storms), rather than background or empty areas.
-- **Memory savings:** Patch-based training reduces GPU memory requirements, enabling larger batch sizes or higher-resolution inputs.
-- **Better generalization:** The model learns to predict local storm structures and dynamics, which can improve generalization to new events and locations.
-
-Patch-based training is highly recommended for radar nowcasting tasks, especially when storms are sparse in space and time.
+- **Memory savings:** Patch-based training reduces memory requirements, since input dimensions are significantly smaller.
+- **Training Speedup** Training is much faster, and often leads to better storm initiation forecasts. 
 
 ## Outputs
 - **Checkpoints**: Saved in the run directory.
-- **Arguments**: Saved as `args.json` in the run directory for reproducibility.
+- **Arguments**: Saved as `train/test_args.json` in the run directory for reproducibility.
 - **Results**: Results saved in `results/` inside the run directory.
 - **Predictions**: Large data arrays from testing can be saved in a separate directory using `--predictions_dir`.
 

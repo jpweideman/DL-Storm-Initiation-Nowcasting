@@ -347,22 +347,22 @@ def train_radar_model(
         print(f"[{ep:02d}/{end_epoch}] train {tr:.4f} | val {vl:.4f}")
         if not args.no_wandb:
             wandb.log({'epoch':ep,'train_loss':tr,'val_loss':vl})
-            atomic_save({'epoch':ep,'model':model.state_dict(),
-                        'optim':optimizer.state_dict(),'best_val':best_val},
-                       ckpt_latest)
-            if vl < best_val:
-                best_val = vl
-                atomic_save(model.state_dict(), ckpt_best)
-                print("New best saved")
-                if not args.no_wandb:
-                    wandb.log({'best_val_loss':best_val})
-                epochs_since_improvement = 0
-            else:
-                epochs_since_improvement += 1
-            # Only apply early stopping if patience > 0
-            if early_stopping_patience > 0 and epochs_since_improvement >= early_stopping_patience:
-                print(f"Early stopping: validation loss did not improve for {epochs_since_improvement} epochs.")
-                break
+        atomic_save({'epoch':ep,'model':model.state_dict(),
+                    'optim':optimizer.state_dict(),'best_val':best_val},
+                   ckpt_latest)
+        if vl < best_val:
+            best_val = vl
+            atomic_save(model.state_dict(), ckpt_best)
+            print("New best saved")
+            if not args.no_wandb:
+                wandb.log({'best_val_loss':best_val})
+            epochs_since_improvement = 0
+        else:
+            epochs_since_improvement += 1
+        # Only apply early stopping if patience > 0
+        if early_stopping_patience > 0 and epochs_since_improvement >= early_stopping_patience:
+            print(f"Early stopping: validation loss did not improve for {epochs_since_improvement} epochs.")
+            break
 
     print("Done. Checkpoints in", save_dir.resolve())
     if not args.no_wandb:

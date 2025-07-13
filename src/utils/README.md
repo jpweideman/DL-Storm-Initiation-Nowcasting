@@ -13,8 +13,7 @@ This folder contains utility functions for storm detection, animation, and evalu
 - **Storm Detection**: Identify storms and new storm initiations in radar reflectivity data.
 - **Animation**: Visualize storms and new storm formations over time.
 - **Evaluation**: Quantitatively compare predicted and true storm initiations.
-- **CLI**: Command-line interface for evaluating predictions and saving results as JSON.
-- **Section Analysis**: Count storms and new storms in data sections for temporal analysis.
+- **Section Analysis**: Count storms and new storms in different sections of the data.
 
 ## CLI Usage: Evaluate Storm Initiation Predictions
 
@@ -32,7 +31,7 @@ python src/utils/storm_utils.py \
 ```
 
 - `--preds`: Path to predicted reflectivity `.npy` file (shape: N, C, H, W or N, H, W)
-- `--targets`: Path to ground truth reflectivity `.npy` file
+- `--targets`: Path true reflectivity `.npy` file
 - `--out`: Output JSON file for evaluation results
 - `--reflectivity_threshold`: dBZ threshold for storm detection (default: 45)
 - `--area_threshold`: Minimum storm area in pixels (default: 15)
@@ -57,14 +56,12 @@ python src/utils/storm_section_counter.py \
 
 - `--npy_path`: Path to radar data `.npy` file (shape: T, H, W or N, C, H, W)
 - `--interval_percent`: Section size as percentage of total data length (default: 5)
-- `--batch_size`: Number of frames to process at once for memory efficiency (default: 10)
+- `--batch_size`: Number of frames to process at once (for memory efficiency) (default: 10)
 - `--reflectivity_threshold`: dBZ threshold for storm detection (default: 45)
 - `--area_threshold`: Minimum storm area in pixels (default: 15)
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
 - `--overlap_threshold`: Overlap threshold for new storm detection (default: 0.1)
 - `--out`: Optional output JSON file for results
-
-**Output**: JSON file with storm and new storm counts for each temporal section. Useful for analyzing temporal patterns in storm activity and for determining training-validation-testing splits.
 
 ## Main Python Functions
 
@@ -74,7 +71,7 @@ python src/utils/storm_section_counter.py \
 - `detect_new_storm_formations(data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)`
   - Identifies new storm initiations over time.
 - `evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_threshold)`
-  - Compares predicted and true new storm initiations, returns metrics.
+  - Compares predicted and true new storm initiations - returns metrics.
 - `count_storms_by_section(data, interval_percent, batch_size, ...)`
   - Count storms and new storms in temporal sections of data.
 
@@ -84,7 +81,7 @@ python src/utils/storm_section_counter.py \
 - `animate_new_storms(data, new_storms_result)`
   - Animate new storm initiations over time.
 - `animate_storms_polar(data, ...)` and `animate_storms_polar_comparison(true_data, pred_data, ...)`
-  - Polar coordinate visualizations for advanced radar data.
+  - Polar coordinate visualizations for radar data.
 
 ## Example (Python API)
 
@@ -109,14 +106,9 @@ target_new_storms = storm_utils.detect_new_storm_formations(targets)
 metrics = storm_utils.evaluate_new_storm_predictions(pred_new_storms, target_new_storms)
 print(metrics)
 
-# Count storms by sections
-section_counts = storm_utils.count_storms_by_section(targets, interval_percent=5)
-print(f"Found {len(section_counts)} sections with storm activity")
 
 # Animate storms (in a notebook)
 ani = storm_animation_utils.animate_storms(preds)
 from IPython.display import HTML
 display(HTML(ani.to_jshtml()))
 ```
-
-See the function docstrings in `storm_utils.py`, `storm_animation_utils.py`, and `storm_section_counter.py` for more details and advanced options. 

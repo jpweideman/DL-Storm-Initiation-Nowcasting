@@ -5,7 +5,7 @@ This folder contains all data used in the pipeline.
 ## Folders
 
 - **raw/**
-  - Place your original, unmodified radar data files here (e.g., `.h5` files).
+  - Place original, unmodified radar data files here (e.g., `.h5` files).
   - These files are never overwritten or modified by scripts.
   - Example: `data/raw/2024/08/14/scan-sidpol-120km-*.h5`
 

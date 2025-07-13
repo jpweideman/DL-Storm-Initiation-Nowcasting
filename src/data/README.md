@@ -9,13 +9,6 @@ The data processing workflow consists of two steps:
 1. **`data_processing.py`** - Processes raw `.h5` files into intermediate chunks
 2. **`join_processed_data.py`** - Joins all intermediate chunks into final training files
 
-## Workflow Summary
-
-| Step | Input | Output | Purpose |
-|------|-------|--------|---------|
-| 1 | `data/raw/*.h5` | `data/intermediate/*/data.npy` | Process raw files into memory-efficient chunks |
-| 2 | `data/intermediate/*/data.npy` | `data/processed/ZH_radar_dataset.npy` | Join all chunks into single training file |
-
 ## Scripts
 
 ### 1. data_processing.py
@@ -23,19 +16,30 @@ The data processing workflow consists of two steps:
 Processes raw `.h5` radar files into intermediate `.npy` chunks organized by directory structure.
 
 **Input:** Raw `.h5` files in `data/raw/` (organized by year/month subdirectories)
+
 **Output:** Intermediate chunks in `data/intermediate/` (preserving directory structure)
 
-**Features:**
-- Processes each `.h5` file into 14 radar scans (360×240 pixels each)
-- Cleans data by replacing invalid values (96.00197) with 0
-- Pads or crops images to target size (360×240)
+- Processes each `.h5` file into radar scans (configurable number of channels)
+- Cleans data by replacing invalid values with 0 (configurable noise value)
+- Pads or crops images to target size (configurable dimensions)
 - Saves chunks as `.npy` files with corresponding filename lists as `.json`
 - Memory-efficient processing for large datasets
 
 **Usage:**
 ```bash
+# Default usage (for the provided example dataset)
 python src/data/data_processing.py
+
+# Custom parameters for different data formats
+python src/data/data_processing.py --target_height 360 --target_width 320 --num_channels 8 --variable ZV --noise_value 0.0
 ```
+
+**Command-line Arguments:**
+- `--target_height`: Target height for output arrays (default: 360)
+- `--target_width`: Target width for output arrays (default: 240)
+- `--num_channels`: Number of channels/scans to process (default: 14)
+- `--variable`: Variable to extract from scans (default: "ZH")
+- `--noise_value`: Noise value to replace with 0 (default: 96.00197)
 
 **Output Structure:**
 ```
@@ -59,7 +63,6 @@ Joins all intermediate chunks into a single large training dataset.
 
 **Output:** Final training-ready files in `data/processed/`
 
-**Features:**
 - Concatenates all intermediate `.npy` files into a single large array
 - Combines all filename lists into a single JSON file
 - Uses memory mapping for handling of large datasets

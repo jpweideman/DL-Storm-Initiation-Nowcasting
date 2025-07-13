@@ -21,7 +21,7 @@ sample_shape = None
 for root in join_targets:
     arr = np.load(os.path.join(root, 'data.npy'), mmap_mode='r')
     if sample_shape is None:
-        sample_shape = arr.shape[1:]  # (14, 360, 240)
+        sample_shape = arr.shape[1:]  
     total_samples += arr.shape[0]
 
 # Ensure output directory exists

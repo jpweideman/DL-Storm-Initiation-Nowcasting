@@ -17,6 +17,5 @@ This folder contains modular definitions of all deep learning models used for ra
   ```python
   from src.models.unet_3d_cnn import UNet3DCNN
   ```
-- All model architectures are defined as PyTorch `nn.Module` subclasses.
 
 See [src/training/README.md](../training/README.md) for training models. 
