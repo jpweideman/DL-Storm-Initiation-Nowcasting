@@ -63,7 +63,7 @@ python src/utils/storm_section_counter.py \
 - `--overlap_threshold`: Overlap threshold for new storm detection (default: 0.1)
 - `--out`: Optional output JSON file for results
 
-## Main Python Functions
+## Main Functions
 
 ### In `storm_utils.py` (detection & evaluation)
 - `detect_storms(data, reflectivity_threshold, area_threshold, dilation_iterations)`
