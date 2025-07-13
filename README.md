@@ -81,7 +81,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --area_threshold 15 \
        --dilation_iterations 5 \
        --overlap_threshold 0.2
-     ```
+```
    - This will save a JSON file with evaluation metrics for storm initiations.
 
 6. **Track Experiments**
