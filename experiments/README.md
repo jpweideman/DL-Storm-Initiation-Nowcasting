@@ -17,7 +17,7 @@ This folder organizes all experiment outputs for training, evaluation, and track
   - **Note:** This folder is in `.gitignore` to prevent large log files from being committed to the repository, but wandb logs will be stored locally on your device during training.
 
 ## Usage
-- **Important:** To follow the intended structure of this repository, you must ensure that the `--save_dir` (for training) and `--run_dir` (for training/testing) arguments point to a subdirectory of `experiments/runs/`.
+- **Important:** To follow the intended structure of this repository, you must ensure that the `--save_dir` (for training) and `--run_dir` (for testing) arguments point to a subdirectory of `experiments/runs/`.
     - Example: `--save_dir experiments/runs/my_experiment` and `--run_dir experiments/runs/my_experiment`
 - All results and checkpoints for that run will be saved in the specified folder.
 - Use `--predictions_dir` to save large prediction/target files elsewhere if needed.
