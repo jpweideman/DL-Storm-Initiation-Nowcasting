@@ -72,7 +72,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
    
 5. **Evaluate Storm Initiation Predictions**
    - Use the storm_utils script to evaluate new storm initiations:
-```bash
+    ```bash
      python src/utils/storm_utils.py \
        --preds predictions/unet3dcnn_example/test_preds_dBZ.npy \
        --targets predictions/unet3dcnn_example/test_targets_dBZ.npy \
@@ -81,7 +81,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --area_threshold 15 \
        --dilation_iterations 5 \
        --overlap_threshold 0.2
-```
+    ```
    - This will save a JSON file with evaluation metrics for storm initiations.
 
 6. **Track Experiments**
