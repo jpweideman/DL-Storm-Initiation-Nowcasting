@@ -45,7 +45,6 @@ class RadarWindowDataset(Dataset):
 
     def __getitem__(self, i):
         return torch.from_numpy(self.X[i]), torch.from_numpy(self.Y[i])
-# ConvLSTM model is now imported from src.models.conv_lstm_nonnormalized
 
 # Training function
 def weighted_mse_loss(pred, target, threshold=40.0, weight_high=10.0):

@@ -88,10 +88,6 @@ class PatchRadarWindowDataset(Dataset):
         Y_patch = Y_patch.astype(np.float32).squeeze(0)
         return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
 
-
-# ConvLSTM model is now imported from src.models.conv_lstm
-
-
 # Weighted MSE loss
 
 def mse_loss(pred, target, maxv=85.0, eps=1e-6):

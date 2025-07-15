@@ -88,7 +88,7 @@ class PatchRadarWindowDataset(Dataset):
 # Weighted MSE loss (copied)
 
 
-# --- Model construction helper ---
+# Model construction helper 
 def parse_architecture_json(json_str):
     """
     Parse a JSON string describing the architecture. Example:
@@ -102,7 +102,7 @@ def parse_int_list(val):
     else:
         return [int(val)]
 
-# --- Training function ---
+# Training function 
 def train_radar_model(
     npy_path: str,
     save_dir: str,

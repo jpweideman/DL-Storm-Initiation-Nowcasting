@@ -83,8 +83,6 @@ class PatchRadarWindowDataset(Dataset):
         return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
 
 
-# UNet 3D CNN model is now imported from src.models.unet_3d_cnn
-
 def mse_loss(pred, target, maxv=85.0, eps=1e-6):
     """
     Compute MSE in dBZ units.

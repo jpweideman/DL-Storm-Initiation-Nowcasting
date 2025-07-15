@@ -99,9 +99,6 @@ class PatchRadarWindowDataset(Dataset):
         return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
 
 
-# UNet ConvLSTM model is now imported from src.models.unet_conv_lstm
-
-
 # Weighted MSE loss
 
 def mse_loss(pred, target, maxv=85.0, eps=1e-6):
@@ -134,15 +131,6 @@ def atomic_save(obj, path):
     torch.save(obj, tmp_path)
     os.replace(tmp_path, path)
 
-# Instead of computing maxv from training data, we use a fixed value of 85. Almost all the data is below 85.           
-# def compute_maxv(cube, end_idx, chunk_size=100):
-#     maxv = 0.0
-#     for i in range(0, end_idx, chunk_size):
-#         chunk = cube[i:min(i+chunk_size, end_idx)]
-#         chunk_max = np.max(np.maximum(chunk, 0))
-#         if chunk_max > maxv:
-#             maxv = chunk_max
-#     return float(maxv)
 
 def train_radar_model(
     npy_path: str,

@@ -84,11 +84,6 @@ class PatchRadarWindowDataset(Dataset):
         Y_patch = Y_patch.astype(np.float32).squeeze(0)
         return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
 
-# Weighted MSE loss (copied)
-
-
-# TrajGRU model is now imported from src.models.traj_gru
-
 # Training function
 def train_radar_model(
     npy_path: str,
@@ -467,8 +462,6 @@ def predict_test_set(
         kernel_size = [3] * len(hidden_channels)
     if L is None:
         L = [5] * len(hidden_channels)
-    
-    # # Validate parameter lengths
 
     
     device = device or "cpu"
