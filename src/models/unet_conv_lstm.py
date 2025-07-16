@@ -86,6 +86,8 @@ class UNetConvLSTM(nn.Module):
     lstm_hid : int or tuple/list of int
         Number of hidden channels in the ConvLSTM bottleneck.
         If a tuple/list, multiple ConvLSTM layers are stacked.
+        **Each entry corresponds to a single ConvLSTMCell (not a double block).**
+        The number of entries determines the number of ConvLSTM layers in the bottleneck.
     seq_len : int
         Input sequence length (number of time steps).
     kernel : int

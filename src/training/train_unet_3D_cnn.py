@@ -157,7 +157,8 @@ def train_radar_model(
         Base number of channels for U-Net encoder/decoder (default: 32).
     bottleneck_dims : tuple/list, optional
         Sequence of widths for the 3D CNN bottleneck layers (e.g., (32, 64, 32)).
-        The number of entries determines the depth of the bottleneck.
+        **Each entry corresponds to a DoubleConv3D block (i.e., two Conv3D layers per entry).**
+        The number of entries determines the depth of the bottleneck in terms of blocks, but the total number of Conv3D layers is 2 × len(bottleneck_dims).
     kernel_size : int, optional
         Convolution kernel size (default: 3).
     epochs : int, optional

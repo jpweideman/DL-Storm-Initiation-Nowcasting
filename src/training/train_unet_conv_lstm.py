@@ -207,6 +207,8 @@ def train_radar_model(
         Number of hidden channels in the ConvLSTM bottleneck (default: 64).
         If a tuple or list is provided, multiple ConvLSTM layers are stacked in the bottleneck,
         with each value specifying the hidden size of each layer.
+        **Each entry corresponds to a single ConvLSTMCell (not a double block).**
+        The number of entries determines the number of ConvLSTM layers in the bottleneck.
     wandb_project : str, optional
         wandb project name (default: "radar-forecasting").
     early_stopping_patience : int, optional
