@@ -97,7 +97,7 @@ def main():
         rel_filenames = []
         for fname in tqdm(sorted(h5_files), desc=f"Processing {rel_dir}"):
             fpath = os.path.join(root, fname)
-            try:
+    try:
                 tensor = process_one_file(
                     fpath, 
                     args.target_height, 
@@ -108,13 +108,13 @@ def main():
                 )
                 tensors.append(tensor)
                 rel_filenames.append(os.path.relpath(fpath, data_dir))
-            except Exception as e:
+    except Exception as e:
                 print(f"Error processing {fpath}: {e}")
-        if tensors:
-            np.save(out_npy, np.stack(tensors))
-            with open(os.path.join(out_dir, "filenames.json"), "w") as f:
-                json.dump(rel_filenames, f)
-            print(f"Saved {len(tensors)} tensors to {out_npy}")
+                if tensors:
+                    np.save(out_npy, np.stack(tensors))
+                    with open(os.path.join(out_dir, "filenames.json"), "w") as f:
+                        json.dump(rel_filenames, f)
+                    print(f"Saved {len(tensors)} tensors to {out_npy}")
 
     print("\nProcessing complete!")
 

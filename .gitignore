@@ -14,7 +14,10 @@ wandb_old/
 old_scripts/
 runs/
 
+data/processed_example/
+
 storm_*.json
 
 !notebooks/*.ipynb
-!experiments/runs/storm_*.json
+!experiments/runs/storm_*.jsondata/processed_example/
+
