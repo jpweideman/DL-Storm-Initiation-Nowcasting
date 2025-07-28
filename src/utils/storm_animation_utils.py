@@ -8,7 +8,6 @@ from matplotlib.colors import Normalize
 import matplotlib.patches as mpatches
 from src.utils.storm_utils import detect_storms  # For any detection needs in animation
 
-# --- Animation Functions ---
 def animate_storms(data, reflectivity_threshold=45, area_threshold=15, dilation_iterations=5, interval=100):
     """
     Animate storm detection over time from radar reflectivity data.

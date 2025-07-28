@@ -15,9 +15,9 @@ This folder contains utility functions for storm detection, animation, and evalu
 - **Evaluation**: Quantitatively compare predicted and true storm initiations.
 - **Section Analysis**: Count storms and new storms in different sections of the data.
 
-## CLI Usage: Evaluate Storm Initiation Predictions
+## CLI Usage: Evaluate Storm Initiation Predictions and Forecasting Metrics
 
-After running testing and saving predictions/targets as `.npy` files, evaluate storm initiations with:
+After running testing and saving predictions/targets as `.npy` files, evaluate both storm initiations and forecasting metrics with:
 
 ```bash
 python src/utils/storm_utils.py \
@@ -37,6 +37,33 @@ python src/utils/storm_utils.py \
 - `--area_threshold`: Minimum storm area in pixels (default: 15)
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
 - `--overlap_threshold`: Overlap ratio for matching storms (default: 0.2)
+
+**Output includes both:**
+- **Storm initiation metrics**: correct, early, late, false positives, etc.
+- **Forecasting metrics**: B-MSE, CSI, HSS for thresholds [2, 5, 10, 30, 45] dBZ
+
+## CLI Usage: Compute Forecasting Metrics (CSI, HSS, B-MSE)
+
+Compute comprehensive forecasting metrics on saved prediction and target files:
+
+```bash
+python src/utils/compute_forecasting_metrics.py \
+  --preds experiments/runs/trajgru_example/test_preds_dBZ.npy \
+  --targets experiments/runs/trajgru_example/test_targets_dBZ.npy \
+  --out experiments/runs/trajgru_example/results/forecasting_metrics.json \
+  --maxv 85.0
+```
+
+- `--preds`: Path to predicted values `.npy` file (shape: N, C, H, W or N, H, W)
+- `--targets`: Path to target values `.npy` file (shape: N, C, H, W or N, H, W)
+- `--out`: Output JSON file for metrics results
+- `--maxv`: Maximum value for denormalization (default: 85.0)
+- `--eps`: Small epsilon to avoid division by zero (default: 1e-6)
+
+**Output metrics:**
+- **B-MSE**: Balanced Mean Squared Error using weighted scheme
+- **CSI**: Critical Success Index for thresholds [2, 5, 10, 30, 45] dBZ
+- **HSS**: Heidke Skill Score for thresholds [2, 5, 10, 30, 45] dBZ
 
 ## CLI Usage: Count Storms by Data Sections
 
@@ -74,6 +101,12 @@ python src/utils/storm_section_counter.py \
   - Compares predicted and true new storm initiations - returns metrics.
 - `count_storms_by_section(data, interval_percent, batch_size, ...)`
   - Count storms and new storms in temporal sections of data.
+- `compute_csi_hss(pred, target, threshold)`
+  - Computes CSI (Critical Success Index) and HSS (Heidke Skill Score) for a given threshold.
+- `compute_b_mse(pred, target, maxv, eps)`
+  - Computes B-MSE (Balanced Mean Squared Error) using the same weighting scheme as training.
+- `compute_forecasting_metrics(pred, target, maxv, eps)`
+  - Computes comprehensive forecasting metrics including CSI, HSS, and B-MSE for all thresholds.
 
 ### In `storm_animation_utils.py` (visualization)
 - `animate_storms(data, ...)`
@@ -102,10 +135,16 @@ if preds.ndim == 4:
 pred_new_storms = storm_utils.detect_new_storm_formations(preds)
 target_new_storms = storm_utils.detect_new_storm_formations(targets)
 
-# Evaluate
-metrics = storm_utils.evaluate_new_storm_predictions(pred_new_storms, target_new_storms)
-print(metrics)
+# Evaluate storm initiation predictions
+storm_metrics = storm_utils.evaluate_new_storm_predictions(pred_new_storms, target_new_storms)
+print("Storm initiation metrics:", storm_metrics)
 
+# Compute forecasting metrics (CSI, HSS, B-MSE)
+# Note: predictions and targets are already in dBZ
+forecasting_metrics = storm_utils.compute_forecasting_metrics(preds, targets)
+print("B-MSE:", forecasting_metrics['b_mse'])
+print("CSI by threshold:", forecasting_metrics['csi_by_threshold'])
+print("HSS by threshold:", forecasting_metrics['hss_by_threshold'])
 
 # Animate storms (in a notebook)
 ani = storm_animation_utils.animate_storms(preds)

@@ -9,6 +9,116 @@ import json
 from tqdm import tqdm
 import os
 
+def compute_csi_hss(pred, target, threshold):
+    """
+    Compute CSI (Critical Success Index) and HSS (Heidke Skill Score) for a given threshold.
+    
+    Parameters
+    ----------
+    pred : np.ndarray
+        Predicted values in dBZ.
+    target : np.ndarray
+        Ground truth values in dBZ.
+    threshold : float
+        Threshold in dBZ to convert to binary (0/1).
+        
+    Returns
+    -------
+    tuple
+        (CSI, HSS) scores.
+    """
+    # Convert to binary using threshold
+    pred_binary = (pred >= threshold).astype(int)
+    target_binary = (target >= threshold).astype(int)
+    
+    # Calculate confusion matrix elements
+    TP = np.sum((pred_binary == 1) & (target_binary == 1))  # True Positive
+    FN = np.sum((pred_binary == 0) & (target_binary == 1))  # False Negative
+    FP = np.sum((pred_binary == 1) & (target_binary == 0))  # False Positive
+    TN = np.sum((pred_binary == 0) & (target_binary == 0))  # True Negative
+    
+    # Calculate CSI
+    if TP + FN + FP == 0:
+        CSI = 0.0
+    else:
+        CSI = TP / (TP + FN + FP)
+    
+    # Calculate HSS
+    denominator = (TP + FN) * (FN + TN) + (TP + FP) * (FP + TN)
+    if denominator == 0:
+        HSS = 0.0
+    else:
+        HSS = (TP * TN - FN * FP) / denominator
+    
+    return CSI, HSS
+
+def compute_b_mse(pred, target):
+    """
+    Compute B-MSE (Balanced Mean Squared Error) using the same weighting scheme as in training.
+    
+    Parameters
+    ----------
+    pred : np.ndarray
+        Predicted values in dBZ.
+    target : np.ndarray
+        Ground truth values in dBZ.
+        
+    Returns
+    -------
+    float
+        B-MSE value.
+    """
+    # Compute weights based on dBZ values directly
+    w = np.ones_like(target)
+    w = np.where(target < 2, 1.0, w)
+    w = np.where((target >= 2) & (target < 5), 2.0, w)
+    w = np.where((target >= 5) & (target < 10), 5.0, w)
+    w = np.where((target >= 10) & (target < 30), 10.0, w)
+    w = np.where((target >= 30) & (target < 45), 30.0, w)
+    w = np.where(target >= 45, 45.0, w)
+    
+    # B-MSE
+    b_mse = np.sum(w * (pred - target) ** 2) / np.sum(w)
+    return b_mse
+
+def compute_forecasting_metrics(pred, target):
+    """
+    Compute comprehensive forecasting metrics including CSI, HSS, and B-MSE.
+    
+    Parameters
+    ----------
+    pred : np.ndarray
+        Predicted values in dBZ.
+    target : np.ndarray
+        Ground truth values in dBZ.
+        
+    Returns
+    -------
+    dict
+        Dictionary containing all metrics:
+        - 'b_mse': Balanced Mean Squared Error
+        - 'csi_by_threshold': CSI scores for thresholds [2, 5, 10, 30, 45] dBZ
+        - 'hss_by_threshold': HSS scores for thresholds [2, 5, 10, 30, 45] dBZ
+    """
+    # Compute B-MSE
+    b_mse_value = compute_b_mse(pred, target)
+    
+    # Compute CSI and HSS for different thresholds
+    thresholds = [2, 5, 10, 30, 45]
+    csi_by_threshold = {}
+    hss_by_threshold = {}
+    
+    for th in thresholds:
+        csi, hss = compute_csi_hss(pred, target, th)
+        csi_by_threshold[f"csi_{th}"] = float(csi)  # Convert to Python float
+        hss_by_threshold[f"hss_{th}"] = float(hss)  # Convert to Python float
+    
+    return {
+        "b_mse": float(b_mse_value),  # Convert to Python float
+        "csi_by_threshold": csi_by_threshold,
+        "hss_by_threshold": hss_by_threshold
+    }
+
 def detect_storms(data, reflectivity_threshold=45, area_threshold=15, dilation_iterations=5):
     """
     Detects storms in radar data and returns their count and coordinates at each time step.
@@ -263,16 +373,16 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     false_positive_ratio = false_positives / total_pred if total_pred > 0 else 0.0
 
     return {
-        "correct": correct,
-        "early": early,
-        "late": late,
-        "false_positives": false_positives,
-        "total_true": total_true,
-        "total_pred": total_pred,
-        "correct_over_true": correct_over_true,
-        "correct_over_pred": correct_over_pred,
-        "anytime_ratio": anytime_ratio,
-        "false_positive_ratio": false_positive_ratio,
+        "correct": int(correct),
+        "early": int(early),
+        "late": int(late),
+        "false_positives": int(false_positives),
+        "total_true": int(total_true),
+        "total_pred": int(total_pred),
+        "correct_over_true": float(correct_over_true),
+        "correct_over_pred": float(correct_over_pred),
+        "anytime_ratio": float(anytime_ratio),
+        "false_positive_ratio": float(false_positive_ratio),
     }
 
 if __name__ == "__main__":
@@ -348,9 +458,29 @@ if __name__ == "__main__":
         dilation_iterations=args.dilation_iterations,
         desc='True storms')
 
-    # Evaluate
-    results = evaluate_new_storm_predictions(pred_storms, tgt_storms, overlap_threshold=args.overlap_threshold)
-    print(json.dumps(results, indent=2))
+    # Evaluate storm initiation predictions
+    storm_results = evaluate_new_storm_predictions(pred_storms, tgt_storms, overlap_threshold=args.overlap_threshold)
+    
+    # Compute forecasting metrics (CSI, HSS, B-MSE)
+    forecasting_metrics = compute_forecasting_metrics(pred_cappi, tgt_cappi)
+    
+    # Combine results
+    results = {
+        "storm_initiation_metrics": storm_results,
+        "forecasting_metrics": forecasting_metrics
+    }
+    
+    print("\n=== STORM INITIATION METRICS ===")
+    print(json.dumps(storm_results, indent=2))
+    
+    print("\n=== FORECASTING METRICS ===")
+    print(f"B-MSE: {forecasting_metrics['b_mse']:.4f}")
+    print("CSI by threshold:")
+    for th, csi in forecasting_metrics['csi_by_threshold'].items():
+        print(f"  {th}: {csi:.4f}")
+    print("HSS by threshold:")
+    for th, hss in forecasting_metrics['hss_by_threshold'].items():
+        print(f"  {th}: {hss:.4f}")
 
     # Save to JSON
     with open(args.out, 'w') as f:
