@@ -28,61 +28,8 @@ def set_seed(seed=42):
 
 set_seed(42)
 
-# Dataset definitions (copied from train_conv_lstm.py)
-class RadarWindowDataset(Dataset):
-    def __init__(self, cube_norm, seq_in, seq_out, maxv=85.0):
-        self.cube = cube_norm
-        self.seq_in = seq_in
-        self.seq_out = seq_out
-        self.maxv = maxv
-        self.last = cube_norm.shape[0] - seq_in - seq_out + 1
-    def __len__(self):
-        return self.last
-    def __getitem__(self, i):
-        X = np.maximum(self.cube[i:i+self.seq_in], 0) / (self.maxv + 1e-6)
-        Y = np.maximum(self.cube[i+self.seq_in:i+self.seq_in+self.seq_out], 0) / (self.maxv + 1e-6)
-        X = X.astype(np.float32)
-        Y = Y.astype(np.float32).squeeze(0)
-        return torch.from_numpy(X), torch.from_numpy(Y)
-
-class PatchRadarWindowDataset(Dataset):
-    def __init__(self, cube_norm, seq_in, seq_out, patch_size=64, patch_stride=64, patch_thresh=0.4, patch_frac=0.15, patch_index_path=None, maxv=85.0):
-        self.cube = cube_norm
-        self.seq_in = seq_in
-        self.seq_out = seq_out
-        self.patch_size = patch_size
-        self.patch_stride = patch_stride
-        self.patch_thresh = patch_thresh
-        self.patch_frac = patch_frac
-        self.maxv = maxv
-        self.patches = []  # List of (t, y, x)
-        T, C, H, W = cube_norm.shape
-        last = T - seq_in - seq_out + 1
-        if patch_index_path is not None and os.path.exists(patch_index_path):
-            print(f"Loading patch indices from {patch_index_path}")
-            self.patches = np.load(patch_index_path, allow_pickle=True).tolist()
-        else:
-            for t in tqdm(range(last), desc="Extracting patches"):
-                for y in range(0, H - patch_size + 1, patch_stride):
-                    for x in range(0, W - patch_size + 1, patch_stride):
-                        if y + patch_size <= H and x + patch_size <= W:
-                            Y_patch = np.maximum(self.cube[t+seq_in:t+seq_in+seq_out, :, y:y+patch_size, x:x+patch_size], 0) / (self.maxv + 1e-6)
-                            total_pix = Y_patch.size
-                            n_above = (Y_patch > patch_thresh).sum()
-                            if n_above / total_pix >= patch_frac:
-                                self.patches.append((t, y, x))
-            if patch_index_path is not None:
-                np.save(patch_index_path, np.array(self.patches, dtype=object))
-                print(f"Saved patch indices to {patch_index_path}")
-    def __len__(self):
-        return len(self.patches)
-    def __getitem__(self, i):
-        t, y, x = self.patches[i]
-        X_patch = np.maximum(self.cube[t:t+self.seq_in, :, y:y+self.patch_size, x:x+self.patch_size], 0) / (self.maxv + 1e-6)
-        Y_patch = np.maximum(self.cube[t+self.seq_in:t+self.seq_in+self.seq_out, :, y:y+self.patch_size, x:x+self.patch_size], 0) / (self.maxv + 1e-6)
-        X_patch = X_patch.astype(np.float32)
-        Y_patch = Y_patch.astype(np.float32).squeeze(0)
-        return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
+# Import centralized dataloaders
+from src.training.utils import RadarWindowDataset, PatchRadarWindowDataset
 
 # Training function
 def train_radar_model(

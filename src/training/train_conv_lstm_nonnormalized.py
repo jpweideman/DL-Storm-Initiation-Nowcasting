@@ -29,22 +29,9 @@ def atomic_save(obj, path):
     torch.save(obj, tmp_path)
     os.replace(tmp_path, path)
 # Dataset – raw dBZ without normalizatio
-class RadarWindowDataset(Dataset):
-    def __init__(self, cube, seq_in, seq_out):
-        # cube: np.ndarray shape (T,C,H,W) in original dBZ scale
-        X, Y = [], []
-        last = cube.shape[0] - seq_in - seq_out + 1
-        for t in range(last):
-            X.append(cube[t:t+seq_in])
-            Y.append(cube[t+seq_in:t+seq_in+seq_out].squeeze(0))
-        self.X = np.stack(X).astype(np.float32)  # (N,seq_in,C,H,W)
-        self.Y = np.stack(Y).astype(np.float32)  # (N,C,H,W)
-
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, i):
-        return torch.from_numpy(self.X[i]), torch.from_numpy(self.Y[i])
+# Import centralized dataloaders
+from src.training.utils import NonNormalizedRadarWindowDataset as RadarWindowDataset
+# ConvLSTM model is now imported from src.models.conv_lstm_nonnormalized
 
 # Training function
 def weighted_mse_loss(pred, target, threshold=40.0, weight_high=10.0):
