@@ -6,7 +6,7 @@ from skimage.measure import find_contours
 from matplotlib.path import Path
 from matplotlib.colors import Normalize
 import matplotlib.patches as mpatches
-from src.utils.storm_utils import detect_storms, compute_polar_pixel_areas  
+from src.utils.storm_utils import detect_storms, compute_polar_pixel_areas, detect_new_storm_formations, compute_displacement_vectors, predict_storm_positions
 
 def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, interval=100):
     """
@@ -15,7 +15,7 @@ def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dil
     Parameters:
     - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
     - reflectivity_threshold: dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: minimum storm area in km² (default: 5.0)
+    - area_threshold_km2: minimum storm area in km² (default: 10.0)
     - dilation_iterations: dilation iterations for storm smoothing (default: 5)
     - interval: animation interval in milliseconds (default: 100)
     """
@@ -55,7 +55,7 @@ def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dil
     ani = animation.FuncAnimation(fig, update, frames=data.shape[0], interval=interval)
     return ani
 
-def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=5.0,
+def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
                          dilation_iterations=5, interval=100, figsize=(6, 6)):
     """
     Animate storm detection over time from radar reflectivity data in polar coordinates using physical area calculations.
@@ -63,7 +63,7 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=5.0,
     Parameters:
     - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
     - storm_threshold: dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: minimum storm area in km² (default: 5.0)
+    - area_threshold_km2: minimum storm area in km² (default: 10.0)
     - dilation_iterations: dilation iterations for storm smoothing (default: 5)
     - interval: animation interval in milliseconds (default: 100)
     - figsize: figure size (default: (6, 6))
@@ -237,4 +237,168 @@ def animate_new_storms(data, new_storms_result):
         return [img, title] + storm_lines
     plt.close(fig)
     ani = animation.FuncAnimation(fig, update, frames=data.shape[0], interval=200)
+    return ani 
+
+def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
+                                dilation_iterations=5, overlap_threshold=0.1, interval=200):
+    """
+    Animate new storm detection with wind-based prediction visualization.
+    
+    Parameters:
+    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
+    - reflectivity_threshold: dBZ threshold for storm detection (default: 45)
+    - area_threshold_km2: minimum storm area in km² (default: 10.0)
+    - dilation_iterations: dilation iterations for storm smoothing (default: 5)
+    - overlap_threshold: overlap threshold for new storm detection (default: 0.1)
+    - interval: animation interval in milliseconds (default: 200)
+
+    
+    Returns:
+    - ani: matplotlib.animation.FuncAnimation object
+    """
+
+    fig, ax = plt.subplots(figsize=(6, 7))
+    cmap = plt.get_cmap("jet")
+    img = ax.imshow(data[0], cmap=cmap, vmin=0, vmax=80, extent=[0, data.shape[2], data.shape[1], 0])
+    title = ax.set_title("Displacement-Based New Storm Detection - Time Step 0")
+    colorbar = plt.colorbar(img, ax=ax, label="Reflectivity (dBZ)")
+    
+    # Set proper axis limits 
+    ax.set_xlim(0, data.shape[2])
+    ax.set_ylim(data.shape[1], 0)
+    
+    # Get all storm results for prediction
+    storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
+    
+    # Get new storm formations (this will compute displacement vectors internally)
+    result = detect_new_storm_formations(
+        data, reflectivity_threshold, area_threshold_km2, 
+        dilation_iterations, overlap_threshold, use_displacement_prediction=True
+    )
+    
+    # Check if displacement fields were returned
+    if isinstance(result, tuple):
+        new_storms_result, displacement_fields = result
+    else:
+        new_storms_result = result
+        # If no displacement fields returned, compute them for visualization
+        displacement_vectors, displacement_fields = compute_displacement_vectors(data, show_progress=False)
+    
+    storm_lines = []
+    predicted_lines = []
+    new_storm_lines = []
+    wind_arrows = []
+    
+    def update(frame_id):
+        nonlocal storm_lines, predicted_lines, new_storm_lines, wind_arrows
+        
+        # Clear previous lines and arrows
+        for line in storm_lines + predicted_lines + new_storm_lines:
+            line.remove()
+        for arrow in wind_arrows:
+            arrow.remove()
+        storm_lines = []
+        predicted_lines = []
+        new_storm_lines = []
+        wind_arrows = []
+        
+        frame = data[frame_id]
+        img.set_data(frame)
+        title.set_text(f"Displacement-Based New Storm Detection - Time Step {frame_id}")
+        
+        # Get current storms
+        current_storms = storm_results[frame_id]
+        current_masks = current_storms['storm_masks']
+        current_coords = current_storms['storm_coordinates']
+        
+        # Plot all current storms in red (same as other plots)
+        for contour in current_coords:
+            contour = np.array(contour)
+            line, = ax.plot(contour[:, 0], contour[:, 1], color='red', linewidth=2)
+            storm_lines.append(line)
+        
+        # Plot predicted storm positions if not first frame
+        if frame_id > 0 and len(storm_results[frame_id-1]['storm_masks']) > 0:
+            displacement_field = displacement_fields[frame_id-1]
+            previous_masks = storm_results[frame_id-1]['storm_masks']
+            predicted_masks = predict_storm_positions(previous_masks, displacement_field, data.shape[1:])
+            
+            # Create contours for predicted masks
+            for pred_mask in predicted_masks:
+                contours = find_contours(pred_mask.astype(float), 0.5)
+                for contour in contours:
+                    line, = ax.plot(contour[:, 1], contour[:, 0], color='orange', 
+                                  linewidth=2, linestyle='--')
+                    predicted_lines.append(line)
+        
+        # Plot new storms in bright green 
+        frame_entry = next((f for f in new_storms_result if f["time_step"] == frame_id), None)
+        if frame_entry and frame_entry["new_storm_count"] > 0:
+            for contour in frame_entry["new_storm_coordinates"]:
+                contour = np.array(contour)
+                line, = ax.plot(contour[:, 0], contour[:, 1], color='lime', linewidth=2)
+                new_storm_lines.append(line)
+        
+        # Plot displacement vectors as arrows 
+        if frame_id > 0:  # Only show displacement vectors after first frame
+            displacement_field = displacement_fields[frame_id-1]
+            
+
+            
+            # Create a grid for displacement vectors (every 25th pixel to reduce clutter)
+            step = 25
+            y_grid, x_grid = np.mgrid[step//2:data.shape[1]:step, step//2:data.shape[2]:step]
+            
+            # Get displacement vectors at grid points
+            u_vals = displacement_field[y_grid, x_grid, 0]
+            v_vals = displacement_field[y_grid, x_grid, 1]
+            
+
+            
+            # Scale displacement vectors to make them more visible (4.5x longer than actual displacement)
+            # The displacement vectors represent pixel displacement from cross-correlation
+            scale_factor = 4.5  # Make arrows 4.5 times longer for better visibility
+            
+            u_scaled = u_vals * scale_factor
+            v_scaled = v_vals * scale_factor
+            
+            # Ensure minimum arrow size for visibility 
+            min_arrow_length = 3.0
+            u_scaled = np.where(np.abs(u_scaled) < min_arrow_length, 
+                              np.sign(u_scaled) * min_arrow_length, u_scaled)
+            v_scaled = np.where(np.abs(v_scaled) < min_arrow_length, 
+                              np.sign(v_scaled) * min_arrow_length, v_scaled)
+            
+            # Plot displacement vectors as arrows showing predicted pixel displacement
+            for i in range(x_grid.shape[0]):
+                for j in range(x_grid.shape[1]):
+                    x, y = x_grid[i, j], y_grid[i, j]
+                    u, v = u_scaled[i, j], v_scaled[i, j]
+                    
+                    # Only plot if the predicted position is within bounds
+                    predicted_x = x + u
+                    predicted_y = y + v
+                    if 0 <= predicted_x < data.shape[2] and 0 <= predicted_y < data.shape[1]:
+                        # Draw arrow from current position to predicted position
+                        # The arrow should point in the direction of movement
+                        arrow = ax.arrow(x, y, u, v, 
+                                       head_width=1.5, head_length=1.5, 
+                                       fc='red', ec='red', alpha=0.8, linewidth=1)
+                        wind_arrows.append(arrow)
+        
+        # Add legend
+        if frame_id == 0:  # Only add legend once
+            from matplotlib.lines import Line2D
+            legend_elements = [
+                Line2D([0], [0], color='red', lw=2, label='All Storms'),
+                Line2D([0], [0], color='orange', lw=2, linestyle='--', label='Predicted Positions'),
+                Line2D([0], [0], color='lime', lw=2, label='New Storms'),
+                Line2D([0], [0], color='red', lw=1, marker='>', markersize=8, label='Displacement Vectors')
+            ]
+            ax.legend(handles=legend_elements, loc='upper right')
+        
+        return [img, title] + storm_lines + predicted_lines + new_storm_lines + wind_arrows
+    
+    plt.close(fig)
+    ani = animation.FuncAnimation(fig, update, frames=data.shape[0], interval=interval)
     return ani 

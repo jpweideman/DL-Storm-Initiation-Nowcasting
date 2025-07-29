@@ -71,7 +71,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
    - Evaluation results are saved in `results/` inside the run directory.
    
 5. **Evaluate Storm Initiation Predictions**
-   - Use the storm_utils script to evaluate new storm initiations:
+   - Use the storm_utils script to evaluate new storm initiations with displacement-based detection:
     ```bash
      python src/utils/storm_utils.py \
        --preds predictions/unet3dcnn_example/test_preds_dBZ.npy \
@@ -80,9 +80,29 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --reflectivity_threshold 45 \
        --area_threshold_km2 10.0 \
        --dilation_iterations 5 \
-       --overlap_threshold 0.2
+       --overlap_threshold 0.2 \
+       --use_displacement_prediction
     ```
-   - This will save a JSON file with evaluation metrics for storm initiations.
+   - This will save a JSON file with evaluation metrics for storm initiations and forecasting performance.
+   - The displacement-based detection accounts for storm movement caused by wind/advection to reduce false positive new storm detections.
 
 6. **Track Experiments**
    - If using Weights & Biases, logs are saved in `experiments/wandb/`.
+
+## Evaluation Capabilities
+
+### **Storm Initiation Evaluation**
+- **Displacement-Based Detection**: Uses cross-correlation to estimate displacement caused by wind/advection and predict storm positions
+- **Physical Area Calculations**: Storm area measurement in km² accounting for polar coordinate geometry
+- **Multiple Metrics**: Evaluates correct, early, late, and false positive storm detections
+
+### **Forecasting Performance Metrics**
+Comprehensive forecasting evaluation including:
+- **B-MSE (Balanced Mean Squared Error)**: Weighted error metric for different reflectivity ranges
+- **CSI (Critical Success Index)**: For thresholds [2, 5, 10, 30, 45] dBZ
+- **HSS (Heidke Skill Score)**: For thresholds [2, 5, 10, 30, 45] dBZ
+
+### **Visualization Tools**
+- **Storm Animations**: Visualize storm detection over time
+- **Polar Coordinate Plots**: Proper radar data visualization
+- **Wind-Based Detection Visualization**: See current storms, predicted positions, and new storms

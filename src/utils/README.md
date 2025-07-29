@@ -29,6 +29,42 @@ The storm detection now properly handles **radar polar coordinate geometry**:
 
 - **Impact**: A 5 km² storm now requires the same physical area regardless of whether it's near the radar center or at the edge of coverage, ensuring consistent storm detection across the entire radar domain.
 
+## Displacement-Based New Storm Detection
+
+The new storm detection now incorporates **displacement caused by wind/advection** using **patch-based cross-correlation** to improve accuracy:
+
+### **Problem**
+Traditional overlap-based detection can incorrectly classify moving storms as "new" storms, leading to false positives.
+
+### **Solution: Patch-Based Cross-Correlation**
+The displacement-based detection system:
+1. **Divides frames into patches** (default: 64×64 pixels) for local displacement analysis
+2. **Computes cross-correlation** for each patch to estimate local displacement caused by wind/advection
+3. **Creates displacement field** by interpolating patch displacement vectors
+4. **Predicts storm positions** using local displacement vectors at each pixel
+5. **Compares current storms** with predicted positions instead of just previous positions
+
+### **Important Note**
+The displacement vectors represent **pixel displacement caused by wind/advection**, not actual wind speed or direction. They are used solely for storm tracking and position prediction, not for meteorological wind analysis.
+
+### **Implementation**
+- `compute_displacement_vectors()`: Uses **patch-based cross-correlation** to estimate displacement caused by wind/advection
+- `create_displacement_field()`: Interpolates patch displacements into continuous displacement field
+- `predict_storm_positions()`: Moves previous storms according to **local displacement field**
+- `detect_new_storm_formations()`: Uses predicted positions for overlap comparison
+
+### **Benefits** 
+- **Spatial Accuracy**: Captures local displacement patterns and variations
+- **Better Storm Tracking**: More accurate prediction of storm movement
+- **Reduced False Positives**: Only storms that don't match predicted positions are classified as "new"
+- **Similar to Paper**: Implementation follows the approach in the referenced MDPI paper
+- **Configurable**: Can be disabled with `use_displacement_prediction=False` for comparison
+
+### **Parameters**
+- `patch_size`: Size of patches for cross-correlation (default: 64)
+- `patch_stride`: Stride between patches (default: 32)
+- `max_displacement`: Maximum expected displacement in pixels (default: 20)
+
 ## CLI Usage: Evaluate Storm Initiation Predictions and Forecasting Metrics
 
 After running testing and saving predictions/targets as `.npy` files, evaluate both storm initiations and forecasting metrics with:
@@ -41,7 +77,10 @@ python src/utils/storm_utils.py \
   --reflectivity_threshold 45 \
   --area_threshold_km2 5.0 \
   --dilation_iterations 5 \
-  --overlap_threshold 0.2
+  --overlap_threshold 0.2 \
+  --use_displacement_prediction \
+  --patch_size 64 \
+  --patch_stride 32
 ```
 
 - `--preds`: Path to predicted reflectivity `.npy` file (shape: N, C, H, W or N, H, W)
@@ -51,6 +90,11 @@ python src/utils/storm_utils.py \
 - `--area_threshold_km2`: Minimum storm area in km² (default: 5.0)
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
 - `--overlap_threshold`: Overlap ratio for matching storms (default: 0.2)
+- `--use_displacement_prediction`: Enable displacement-based prediction for new storm detection (default: True)
+- `--no_displacement_prediction`: Disable displacement-based prediction (use overlap-based method)
+
+- `--patch_size`: Patch size for displacement computation (default: 64)
+- `--patch_stride`: Patch stride for displacement computation (default: 32)
 
 **Output includes both:**
 - **Storm initiation metrics**: correct, early, late, false positives, etc.
@@ -88,8 +132,17 @@ python src/utils/storm_section_counter.py \
 ### In `storm_utils.py` (detection & evaluation)
 - `detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)`
   - Detects storms in each frame of radar data using physical area calculations for polar coordinates.
-- `detect_new_storm_formations(data, reflectivity_threshold, area_threshold_km2, dilation_iterations, overlap_threshold)`
-  - Identifies new storm initiations over time using physical area calculations.
+- `detect_new_storm_formations(data, reflectivity_threshold, area_threshold_km2, dilation_iterations, overlap_threshold, use_displacement_prediction=True)`
+  - Identifies new storm initiations over time using displacement-based prediction to account for storm movement.
+- `compute_displacement_vectors(data, patch_size, patch_stride, max_displacement)`
+  - Computes displacement vectors using **patch-based cross-correlation** between consecutive radar frames.
+  - Divides each frame into patches and computes cross-correlation for each patch.
+  - Returns both global displacement vectors and spatial displacement fields.
+- `create_displacement_field(patch_displacements, patch_positions, field_shape)`
+  - Creates a displacement field by interpolating patch displacement vectors using inverse distance weighting.
+- `predict_storm_positions(previous_storms, displacement_field, data_shape)`
+  - Predicts where storms from the previous frame should be in the current frame based on **local displacement field**.
+  - Each storm pixel moves according to the local displacement vector at that location.
 - `evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_threshold)`
   - Compares predicted and true new storm initiations - returns metrics.
 - `count_storms_by_section(data, interval_percent, batch_size, ...)`
@@ -108,6 +161,8 @@ python src/utils/storm_section_counter.py \
   - Animate new storm initiations over time.
 - `animate_storms_polar(data, ...)` and `animate_storms_polar_comparison(true_data, pred_data, ...)`
   - Polar coordinate visualizations for radar data.
+- `animate_new_storms_with_wind(data, reflectivity_threshold, area_threshold_km2, dilation_iterations, overlap_threshold, interval)`
+  - Animate displacement-based new storm detection, showing current storms (red), predicted positions (orange dashed), new storms (lime), and displacement vectors (red arrows).
 
 ## Example Notebook Code
 
