@@ -1,12 +1,31 @@
 {
-  "correct": 9,
-  "early": 0,
-  "late": 4,
-  "false_positives": 7,
-  "total_true": 19,
-  "total_pred": 20,
-  "correct_over_true": 0.47368421052631576,
-  "correct_over_pred": 0.45,
-  "anytime_ratio": 0.6842105263157895,
-  "false_positive_ratio": 0.35
+  "storm_initiation_metrics": {
+    "correct": 7,
+    "early": 2,
+    "late": 1,
+    "false_positives": 14,
+    "total_true": 19,
+    "total_pred": 24,
+    "correct_over_true": 0.3684210526315789,
+    "correct_over_pred": 0.2916666666666667,
+    "anytime_ratio": 0.5263157894736842,
+    "false_positive_ratio": 0.5833333333333334
+  },
+  "forecasting_metrics": {
+    "b_mse": 64.82978057861328,
+    "csi_by_threshold": {
+      "csi_2": 0.5176786321524419,
+      "csi_5": 0.5368978658849938,
+      "csi_10": 0.5746521591726541,
+      "csi_30": 0.37520382084581316,
+      "csi_45": 0.18901995862917204
+    },
+    "hss_by_threshold": {
+      "hss_2": 0.31091957227433237,
+      "hss_5": 0.3301793817003253,
+      "hss_10": 0.3527324252123471,
+      "hss_30": 0.27000907979105704,
+      "hss_45": 0.15859636689848697
+    }
+  }
 }

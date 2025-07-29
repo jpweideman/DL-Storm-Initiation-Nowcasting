@@ -6,7 +6,7 @@ from skimage.measure import find_contours
 from matplotlib.path import Path
 from matplotlib.colors import Normalize
 import matplotlib.patches as mpatches
-from src.utils.storm_utils import detect_storms, compute_polar_pixel_areas  # Use updated storm detection
+from src.utils.storm_utils import detect_storms, compute_polar_pixel_areas  
 
 def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, interval=100):
     """
