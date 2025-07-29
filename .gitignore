@@ -18,6 +18,6 @@ data/processed_example/
 
 storm_*.json
 
-!notebooks/*.ipynb
+!notebooks/storm_animation.ipynb
 !experiments/runs/storm_*.jsondata/processed_example/
 

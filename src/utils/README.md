@@ -10,10 +10,24 @@ This folder contains utility functions for storm detection, animation, and evalu
 
 ## Main Features
 
-- **Storm Detection**: Identify storms and new storm initiations in radar reflectivity data.
+- **Storm Detection**: Identify storms and new storm initiations in radar reflectivity data using **physical area calculations** that account for polar coordinate geometry.
 - **Animation**: Visualize storms and new storm formations over time.
 - **Evaluation**: Quantitatively compare predicted and true storm initiations.
 - **Section Analysis**: Count storms and new storms in different sections of the data.
+- **Forecasting Metrics**: Compute CSI, HSS, and B-MSE metrics for comprehensive model evaluation.
+
+## Polar Coordinate Improvements
+
+The storm detection now properly handles **radar polar coordinate geometry**:
+
+- **Problem**: Traditional pixel-based storm detection doesn't account for the fact that radar data is in polar coordinates, where the same number of pixels represents different physical areas depending on distance from the radar.
+
+- **Solution**: The `compute_polar_pixel_areas()` function calculates the physical area (in km²) of each pixel using polar geometry:
+  - Each pixel's area = `(r2² - r1²) × Δθ / 2`
+  - Where `r1` and `r2` are the inner and outer radii of the pixel
+  - And `Δθ` is the angular width of the pixel
+
+- **Impact**: A 5 km² storm now requires the same physical area regardless of whether it's near the radar center or at the edge of coverage, ensuring consistent storm detection across the entire radar domain.
 
 ## CLI Usage: Evaluate Storm Initiation Predictions and Forecasting Metrics
 
@@ -25,7 +39,7 @@ python src/utils/storm_utils.py \
   --targets predictions/unet3dcnn_example/test_targets_dBZ.npy \
   --out experiments/runs/unet3dcnn_example/results/storm_eval.json \
   --reflectivity_threshold 45 \
-  --area_threshold 15 \
+  --area_threshold_km2 5.0 \
   --dilation_iterations 5 \
   --overlap_threshold 0.2
 ```
@@ -34,7 +48,7 @@ python src/utils/storm_utils.py \
 - `--targets`: Path true reflectivity `.npy` file
 - `--out`: Output JSON file for evaluation results
 - `--reflectivity_threshold`: dBZ threshold for storm detection (default: 45)
-- `--area_threshold`: Minimum storm area in pixels (default: 15)
+- `--area_threshold_km2`: Minimum storm area in km² (default: 5.0)
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
 - `--overlap_threshold`: Overlap ratio for matching storms (default: 0.2)
 
@@ -42,28 +56,7 @@ python src/utils/storm_utils.py \
 - **Storm initiation metrics**: correct, early, late, false positives, etc.
 - **Forecasting metrics**: B-MSE, CSI, HSS for thresholds [2, 5, 10, 30, 45] dBZ
 
-## CLI Usage: Compute Forecasting Metrics (CSI, HSS, B-MSE)
 
-Compute comprehensive forecasting metrics on saved prediction and target files:
-
-```bash
-python src/utils/compute_forecasting_metrics.py \
-  --preds experiments/runs/trajgru_example/test_preds_dBZ.npy \
-  --targets experiments/runs/trajgru_example/test_targets_dBZ.npy \
-  --out experiments/runs/trajgru_example/results/forecasting_metrics.json \
-  --maxv 85.0
-```
-
-- `--preds`: Path to predicted values `.npy` file (shape: N, C, H, W or N, H, W)
-- `--targets`: Path to target values `.npy` file (shape: N, C, H, W or N, H, W)
-- `--out`: Output JSON file for metrics results
-- `--maxv`: Maximum value for denormalization (default: 85.0)
-- `--eps`: Small epsilon to avoid division by zero (default: 1e-6)
-
-**Output metrics:**
-- **B-MSE**: Balanced Mean Squared Error using weighted scheme
-- **CSI**: Critical Success Index for thresholds [2, 5, 10, 30, 45] dBZ
-- **HSS**: Heidke Skill Score for thresholds [2, 5, 10, 30, 45] dBZ
 
 ## CLI Usage: Count Storms by Data Sections
 
@@ -75,7 +68,7 @@ python src/utils/storm_section_counter.py \
   --interval_percent 5 \
   --batch_size 10 \
   --reflectivity_threshold 45 \
-  --area_threshold 15 \
+  --area_threshold_km2 10.0 \
   --dilation_iterations 5 \
   --overlap_threshold 0.1 \
   --out results/storm_section_counts.json
@@ -85,7 +78,7 @@ python src/utils/storm_section_counter.py \
 - `--interval_percent`: Section size as percentage of total data length (default: 5)
 - `--batch_size`: Number of frames to process at once (for memory efficiency) (default: 10)
 - `--reflectivity_threshold`: dBZ threshold for storm detection (default: 45)
-- `--area_threshold`: Minimum storm area in pixels (default: 15)
+- `--area_threshold_km2`: Minimum storm area in km² (default: 5.0)
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
 - `--overlap_threshold`: Overlap threshold for new storm detection (default: 0.1)
 - `--out`: Optional output JSON file for results
@@ -93,10 +86,10 @@ python src/utils/storm_section_counter.py \
 ## Main Functions
 
 ### In `storm_utils.py` (detection & evaluation)
-- `detect_storms(data, reflectivity_threshold, area_threshold, dilation_iterations)`
-  - Detects storms in each frame of radar data.
-- `detect_new_storm_formations(data, reflectivity_threshold, area_threshold, dilation_iterations, overlap_threshold)`
-  - Identifies new storm initiations over time.
+- `detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)`
+  - Detects storms in each frame of radar data using physical area calculations for polar coordinates.
+- `detect_new_storm_formations(data, reflectivity_threshold, area_threshold_km2, dilation_iterations, overlap_threshold)`
+  - Identifies new storm initiations over time using physical area calculations.
 - `evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_threshold)`
   - Compares predicted and true new storm initiations - returns metrics.
 - `count_storms_by_section(data, interval_percent, batch_size, ...)`

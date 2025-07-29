@@ -1,6 +1,4 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from IPython.display import display, HTML
 from scipy.ndimage import binary_dilation
 from skimage.measure import find_contours
 from matplotlib.path import Path
@@ -119,26 +117,80 @@ def compute_forecasting_metrics(pred, target):
         "hss_by_threshold": hss_by_threshold
     }
 
-def detect_storms(data, reflectivity_threshold=45, area_threshold=15, dilation_iterations=5):
+def compute_polar_pixel_areas(shape, pixel_spacing_km=0.5):
     """
-    Detects storms in radar data and returns their count and coordinates at each time step.
+    Compute the physical area (in km²) of each pixel in polar radar coordinates.
+    
+    Parameters
+    ----------
+    shape : tuple
+        Shape of the radar data (azimuth_bins, range_bins) where:
+        - azimuth_bins: number of azimuth angles (typically 360)
+        - range_bins: number of range bins at pixel_spacing_km intervals
+    pixel_spacing_km : float
+        Distance between pixels in km (default: 0.5 km)
+        
+    Returns
+    -------
+    np.ndarray
+        Array of shape (azimuth_bins, range_bins) containing the area of each pixel in km²
+    """
+    azimuth_bins, range_bins = shape
+    
+    # Create range and azimuth arrays
+    ranges = np.arange(range_bins) * pixel_spacing_km  # Distance from radar in km
+    azimuths = np.arange(azimuth_bins) * (360 / azimuth_bins)  # Azimuth angles in degrees
+    
+    # Convert azimuths to radians
+    azimuths_rad = np.radians(azimuths)
+    
+    # Create meshgrid - CORRECTED: azimuth first, range second
+    A, R = np.meshgrid(azimuths_rad, ranges, indexing='ij')  # (azimuth_bins, range_bins)
+    
+    # Compute pixel areas using polar geometry
+    # Area = (r2² - r1²) * Δθ / 2
+    # where r1 and r2 are the inner and outer radii of the pixel
+    # and Δθ is the angular width of the pixel
+    
+    # For each range bin, compute the area
+    areas = np.zeros_like(R, dtype=float)
+    
+    for j in range(range_bins):
+        r1 = j * pixel_spacing_km
+        r2 = (j + 1) * pixel_spacing_km
+        
+        # Angular width of each pixel (in radians)
+        delta_theta = 2 * np.pi / azimuth_bins
+        
+        # Area of this pixel
+        pixel_area = (r2**2 - r1**2) * delta_theta / 2
+        
+        areas[:, j] = pixel_area  # All azimuths at this range have same area
+    
+    return areas
+
+def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5):
+    """
+    Detects storms in radar data using physical area calculations for polar coordinates.
 
     Parameters:
-    - data: ndarray of shape (T, H, W)
-    - reflectivity_threshold: threshold for storm detection
-    - area_threshold: minimum storm area
-    - dilation_iterations: dilation iterations
+    - data: ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
+    - reflectivity_threshold: threshold for storm detection (dBZ)
+    - area_threshold_km2: minimum storm area in km² (default: 5.0 km²)
+    - dilation_iterations: dilation iterations for storm smoothing
 
     Returns:
     - List of dictionaries containing storm count and coordinates per frame.
     """
+    # Compute pixel areas for the radar geometry
+    pixel_areas = compute_polar_pixel_areas(data.shape[1:])
+    
     results = []
 
     for t in range(data.shape[0]):
         frame_data = data[t]
         mask = frame_data > reflectivity_threshold
-        dilated_mask = binary_dilation(mask, iterations=dilation_iterations)     #each storm region will expand outward by up to dilation_iterations (5) pixels in all directions. The effect:
-                                                                                 #Small gaps between nearby regions may be filled, merging them into a single region.
+        dilated_mask = binary_dilation(mask, iterations=dilation_iterations)
         contours = find_contours(dilated_mask.astype(float), 0.5)
 
         storms_in_frame = []
@@ -146,38 +198,47 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold=15, dilation_i
         for contour in contours:
             path = Path(contour[:, ::-1])  # (x, y) ordering
 
-            # Grid coordinates
+            # Grid coordinates - for (azimuth_bins, range_bins) shape
+            # frame_data.shape = (azimuth_bins, range_bins)
             x_grid, y_grid = np.meshgrid(
-                np.arange(frame_data.shape[1]), np.arange(frame_data.shape[0])
+                np.arange(frame_data.shape[1]),  # range_bins (x-axis)
+                np.arange(frame_data.shape[0])   # azimuth_bins (y-axis)
             )
             coords = np.vstack((x_grid.ravel(), y_grid.ravel())).T
-            inside = path.contains_points(coords).reshape(frame_data.shape)
+            inside = path.contains_points(coords).reshape(frame_data.shape)  # (azimuth_bins, range_bins)
 
-            area = np.sum(mask & inside)
+            # Calculate physical area using pixel areas
+            storm_pixels = mask & inside
+            physical_area = np.sum(pixel_areas * storm_pixels)
 
-            if area >= area_threshold:
+            if physical_area >= area_threshold_km2:
                 storm_coords = contour[:, [1, 0]].tolist()  # (x, y) points
-                storms_in_frame.append({"mask": inside.astype(int), "contour": storm_coords})
+                storms_in_frame.append({
+                    "mask": inside.astype(int), 
+                    "contour": storm_coords,
+                    "physical_area_km2": float(physical_area)
+                })
 
         frame_result = {
             "time_step": t,
             "storm_count": len(storms_in_frame),
             "storm_coordinates": [s["contour"] for s in storms_in_frame],
             "storm_masks": [s["mask"] for s in storms_in_frame],
+            "storm_areas_km2": [s["physical_area_km2"] for s in storms_in_frame],
         }
 
         results.append(frame_result)
 
     return results
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold=15, dilation_iterations=5, overlap_threshold=0.1):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5, overlap_threshold=0.1):
     """
     Detects new storm formations: frames, count of newly formed storms, and their coordinates.
 
     Parameters:
-    - data: np.ndarray of shape (T, H, W)
+    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
     - reflectivity_threshold: float, reflectivity threshold (dBZ) to identify storms
-    - area_threshold: int, minimum number of pixels for a region to be considered a storm
+    - area_threshold_km2: float, minimum storm area in km² for a region to be considered a storm
     - dilation_iterations: int, number of binary dilation iterations to smooth/merge storms
     - overlap_threshold: float, maximum allowed overlap between a current storm and any previous storm for it to be considered "new".
 
@@ -189,7 +250,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold=
             - 'new_storm_coordinates': list of storm contour coordinates (list of (x, y))
 
     """
-    storm_results = detect_storms(data, reflectivity_threshold, area_threshold, dilation_iterations)
+    storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
     new_storms_summary = []
 
     previous_masks = []
@@ -400,7 +461,7 @@ if __name__ == "__main__":
     parser.add_argument('--out', type=str, required=True, help='Output JSON file for evaluation results')
     parser.add_argument('--overlap_threshold', type=float, default=0.2, help='Overlap threshold for matching storms (default: 0.2)')
     parser.add_argument('--reflectivity_threshold', type=float, default=45, help='Reflectivity threshold for storm detection (default: 45)')
-    parser.add_argument('--area_threshold', type=int, default=15, help='Area threshold for storm detection (default: 15)')
+    parser.add_argument('--area_threshold_km2', type=float, default=5.0, help='Area threshold for storm detection in km² (default: 5.0)')
     parser.add_argument('--dilation_iterations', type=int, default=5, help='Dilation iterations for storm detection (default: 5)')
 
     args = parser.parse_args()
@@ -447,14 +508,14 @@ if __name__ == "__main__":
     pred_storms = detect_with_progress(
         pred_cappi,
         reflectivity_threshold=args.reflectivity_threshold,
-        area_threshold=args.area_threshold,
+        area_threshold_km2=args.area_threshold_km2,
         dilation_iterations=args.dilation_iterations,
         desc='Pred storms')
     print('Detecting new storm formations in targets...')
     tgt_storms = detect_with_progress(
         tgt_cappi,
         reflectivity_threshold=args.reflectivity_threshold,
-        area_threshold=args.area_threshold,
+        area_threshold_km2=args.area_threshold_km2,
         dilation_iterations=args.dilation_iterations,
         desc='True storms')
 

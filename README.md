@@ -78,7 +78,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --targets predictions/unet3dcnn_example/test_targets_dBZ.npy \
        --out experiments/runs/unet3dcnn_example/results/storm_eval.json \
        --reflectivity_threshold 45 \
-       --area_threshold 15 \
+       --area_threshold_km2 10.0 \
        --dilation_iterations 5 \
        --overlap_threshold 0.2
     ```
