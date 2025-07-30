@@ -117,7 +117,11 @@ Comprehensive forecasting evaluation including:
 ### Storm Animation Demos
 
 #### Storm Animation: True vs Predicted
-[![Storm Animation Comparison](https://img.youtube.com/vi/Bz_Hz0iygeY/0.jpg)](https://youtube.com/shorts/Bz_Hz0iygeY)
+
+<video src="https://github.com/jpweideman/Radar-Consulting/raw/feature-updates/storm_animation_comparison.mp4" controls width="700"></video>
+
+---
 
 #### Storm Animation: New Storms with Wind
-[![Storm Animation with Wind](https://img.youtube.com/vi/_wt6uXWbxPQ/0.jpg)](https://youtu.be/_wt6uXWbxPQ)
+
+<video src="https://github.com/jpweideman/Radar-Consulting/raw/feature-updates/storm_animation_with_wind.mp4" controls width="700"></video>
