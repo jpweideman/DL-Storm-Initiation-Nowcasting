@@ -114,16 +114,3 @@ Comprehensive forecasting evaluation including:
 - **Polar Coordinate Plots**: Proper radar data visualization
 - **Wind-Based Detection Visualization**: See current storms, predicted positions, and new storms
 
-### Storm Animation Demos
-
-#### Storm Animation: True vs Predicted
-<video width="700" height="394" controls>
-  <source src="https://github.com/jpweideman/Radar-Consulting/raw/feature-updates/storm_animation_comparison.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
-
-#### Storm Animation: New Storms with Wind
-<video width="700" height="394" controls>
-  <source src="https://github.com/jpweideman/Radar-Consulting/raw/feature-updates/storm_animation_with_wind.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
