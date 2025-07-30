@@ -32,17 +32,6 @@ set_seed(42)
 # Import centralized dataloaders
 from src.training.utils import RadarWindowDataset, PatchRadarWindowDataset
 
-# Weighted MSE loss (copied)
-
-
-# Model construction helper 
-def parse_architecture_json(json_str):
-    """
-    Parse a JSON string describing the architecture. Example:
-    '{"encoder_convs": [{"in_ch": 4, "out_ch": 8, "kernel": 7, "stride": 5, "pad": 1}, ...], ...}'
-    """
-    return json.loads(json_str)
-
 def parse_int_list(val):
     if "," in val:
         return [int(x) for x in val.split(",")]
@@ -67,7 +56,7 @@ def train_radar_model(
     loss_weight_high: float = 10.0,
     patch_size: int = 64,
     patch_stride: int = 64,
-    patch_thresh: float = 0.4,
+    patch_thresh: float = 35.0,
     patch_frac: float = 0.15,
     use_patches: bool = False,
     wandb_project: str = "radar-forecasting",
@@ -656,7 +645,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--loss_weight_high", type=float, default=10.0, help="Weight multiplier for pixels above threshold (default: 10.0)")
     train_parser.add_argument("--patch_size", type=int, default=64, help="Size of spatial patches to extract (default: 64)")
     train_parser.add_argument("--patch_stride", type=int, default=32, help="Stride for patch extraction (default: 32)")
-    train_parser.add_argument("--patch_thresh", type=float, default=0.35, help="Threshold for extracting patches (default: 0.4)")
+    train_parser.add_argument("--patch_thresh", type=float, default=35.0, help="Threshold for extracting patches (default: 35.0 dBZ)")
     train_parser.add_argument("--patch_frac", type=float, default=0.05, help="Minimum fraction of pixels in patch above threshold (default: 0.05)")
     train_parser.add_argument("--use_patches", type=str, default="True", help="Whether to use patch-based training: True or False (default: True)")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")

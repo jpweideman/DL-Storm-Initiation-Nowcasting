@@ -71,7 +71,7 @@ class PatchRadarWindowDataset(Dataset):
     patch_stride : int, optional
         Stride for patch extraction (default: 64)
     patch_thresh : float, optional
-        Threshold for patch selection (default: 0.4)
+        Threshold for patch selection in dBZ (default: 35)
     patch_frac : float, optional
         Minimum fraction of pixels above threshold (default: 0.15)
     patch_index_path : str, optional
@@ -81,19 +81,22 @@ class PatchRadarWindowDataset(Dataset):
     """
     
     def __init__(self, cube, seq_in, seq_out, patch_size=64, patch_stride=64, 
-                 patch_thresh=0.4, patch_frac=0.15, patch_index_path=None, maxv=85.0):
+                 patch_thresh=35, patch_frac=0.15, patch_index_path=None, maxv=85.0):
         self.cube = cube
         self.seq_in = seq_in
         self.seq_out = seq_out
         self.patch_size = patch_size
         self.patch_stride = patch_stride
-        self.patch_thresh = patch_thresh
+        self.patch_thresh = patch_thresh  # dBZ value
         self.patch_frac = patch_frac
         self.maxv = maxv
         self.patches = []  # List of (t, y, x)
         
         T, C, H, W = cube.shape
         last = T - seq_in - seq_out + 1
+        
+        # Normalize patch_thresh for internal use
+        patch_thresh_normalized = self.patch_thresh / (self.maxv + 1e-6)
         
         # Patch index caching
         if patch_index_path is not None and os.path.exists(patch_index_path):
@@ -108,7 +111,7 @@ class PatchRadarWindowDataset(Dataset):
                                 cube[t+seq_in:t+seq_in+seq_out, :, y:y+patch_size, x:x+patch_size], 0
                             ) / (maxv + 1e-6)
                             total_pix = Y_patch.size
-                            n_above = (Y_patch > patch_thresh).sum()
+                            n_above = (Y_patch > patch_thresh_normalized).sum()
                             if n_above / total_pix >= patch_frac:
                                 self.patches.append((t, y, x))
             
