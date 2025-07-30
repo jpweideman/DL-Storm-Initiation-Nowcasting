@@ -117,7 +117,7 @@ Comprehensive forecasting evaluation including:
 ### Storm Animation Demos
 
 #### Storm Animation: True vs Predicted
-<iframe width="700" height="394" src="https://www.youtube.com/embed/Bz_Hz0iygeY" frameborder="0" allowfullscreen></iframe>
+[![Storm Animation Comparison](https://img.youtube.com/vi/Bz_Hz0iygeY/0.jpg)](https://youtube.com/shorts/Bz_Hz0iygeY)
 
 #### Storm Animation: New Storms with Wind
-<iframe width="700" height="394" src="https://www.youtube.com/embed/_wt6uXWbxPQ" frameborder="0" allowfullscreen></iframe>
+[![Storm Animation with Wind](https://img.youtube.com/vi/_wt6uXWbxPQ/0.jpg)](https://youtu.be/_wt6uXWbxPQ)
