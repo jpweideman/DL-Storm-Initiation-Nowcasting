@@ -233,7 +233,7 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilat
 
     return results
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=64, patch_stride=32):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=64, patch_stride=32, patch_thresh=35.0, patch_frac=0.025, maxv=85.0, use_high_reflectivity_patches=True):
     """
     Detects new storm formations using displacement-based prediction to account for storm movement.
 
@@ -246,6 +246,10 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     - use_displacement_prediction: bool, whether to use displacement-based prediction (default: True)
     - patch_size: int, size of patches for cross-correlation (default: 64)
     - patch_stride: int, stride between patches (default: 32)
+    - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
+    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.025)
+    - maxv: float, maximum value for normalization (default: 85.0)
+    - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
 
     Returns:
     - new_storms_summary: list of dict
@@ -253,17 +257,22 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             - 'time_step': int
             - 'new_storm_count': int
             - 'new_storm_coordinates': list of storm contour coordinates (list of (x, y))
-
+    - displacement_fields: list of np.ndarray, displacement fields for each time step (only if use_displacement_prediction=True)
+    - selected_patch_centers: list of lists, patch centers selected for each time step (only if use_displacement_prediction=True)
     """
     storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
     new_storms_summary = []
 
     if use_displacement_prediction and len(data) > 1:
         # Compute displacement vectors and displacement fields for all time steps
-        displacement_vectors, displacement_fields = compute_displacement_vectors(
+        displacement_vectors, displacement_fields, selected_patch_centers = compute_displacement_vectors(
             data, 
             patch_size=patch_size,
             patch_stride=patch_stride,
+            patch_thresh=patch_thresh,
+            patch_frac=patch_frac,
+            maxv=maxv,
+            use_high_reflectivity_patches=use_high_reflectivity_patches,
             show_progress=True
         )
         
@@ -301,52 +310,59 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
                 new_coords = current_coords
 
             new_storms_summary.append({
-                "time_step": frame_result['time_step'],
-                "new_storm_count": new_count,
-                "new_storm_coordinates": new_coords
+                'time_step': t,
+                'new_storm_count': new_count,
+                'new_storm_coordinates': new_coords
             })
-
+            
+            # Update previous masks for next iteration
             previous_masks = current_masks
+        
+        return new_storms_summary, displacement_fields, selected_patch_centers
     else:
-        # Fallback to original overlap-based method
+        # Simple overlap-based method without displacement prediction
         previous_masks = []
-
-        for frame_result in storm_results:
+        
+        for t, frame_result in enumerate(storm_results):
             new_count = 0
             new_coords = []
             current_masks = frame_result['storm_masks']
             current_coords = frame_result['storm_coordinates']
 
-            for i, current in enumerate(current_masks):
-                is_new = True
-                for prev in previous_masks:
-                    # Use symmetric overlap calculation to handle size differences
-                    overlap_current = np.sum(current & prev) / np.sum(current)
-                    overlap_prev = np.sum(current & prev) / np.sum(prev)
-                    overlap = max(overlap_current, overlap_prev)
-                    
-                    if overlap > overlap_threshold:
-                        is_new = False
-                        break
-                if is_new:
-                    new_count += 1
-                    new_coords.append(current_coords[i])
+            if t > 0 and len(previous_masks) > 0:
+                # Check each current storm against previous storms
+                for i, current in enumerate(current_masks):
+                    is_new = True
+                    for previous in previous_masks:
+                        # Use symmetric overlap calculation
+                        overlap_current = np.sum(current & previous) / np.sum(current)
+                        overlap_previous = np.sum(current & previous) / np.sum(previous)
+                        overlap = max(overlap_current, overlap_previous)
+                        
+                        if overlap > overlap_threshold:
+                            is_new = False
+                            break
+                    if is_new:
+                        new_count += 1
+                        new_coords.append(current_coords[i])
+            else:
+                # First frame - all storms are new
+                new_count = len(current_masks)
+                new_coords = current_coords
 
             new_storms_summary.append({
-                "time_step": frame_result['time_step'],
-                "new_storm_count": new_count,
-                "new_storm_coordinates": new_coords
+                'time_step': t,
+                'new_storm_count': new_count,
+                'new_storm_coordinates': new_coords
             })
-
+            
+            # Update previous masks for next iteration
             previous_masks = current_masks
-
-    # Return displacement fields if they were computed, otherwise just the summary
-    if use_displacement_prediction and len(data) > 1:
-        return new_storms_summary, displacement_fields
-    else:
+        
         return new_storms_summary
 
-def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displacement=20, show_progress=True):
+def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displacement=20, show_progress=True, 
+                                patch_thresh=35.0, patch_frac=0.025, maxv=85.0, use_high_reflectivity_patches=True):
     """
     Compute displacement vectors using patch-based cross-correlation between consecutive frames.
     These vectors represent pixel displacement caused by wind/advection.
@@ -357,20 +373,30 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
     - patch_stride: int, stride between patches (default: 32)
     - max_displacement: int, maximum expected displacement in pixels (default: 20)
     - show_progress: bool, whether to show progress bar (default: True)
+    - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
+    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.025)
+    - maxv: float, maximum value for normalization (default: 85.0)
+    - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
     
     Returns:
     - displacement_vectors: np.ndarray of shape (T-1, 2) - (u, v) displacement components for each time step
     - displacement_fields: np.ndarray of shape (T-1, H, W, 2) - displacement field for each time step
+    - selected_patch_centers: list of lists, patch centers selected for each time step
     """
     T, H, W = data.shape
     
-    # Calculate number of patches
-    n_patches_y = (H - patch_size) // patch_stride + 1
-    n_patches_x = (W - patch_size) // patch_stride + 1
+    # Calculate number of patches to cover the entire image
+    # Ensure patches extend to cover the full image, even if some patches go beyond boundaries
+    n_patches_y = max(1, (H - 1) // patch_stride + 1)
+    n_patches_x = max(1, (W - 1) // patch_stride + 1)
+    
+    # Normalize patch_thresh for internal use if patching is used
+    patch_thresh_normalized = patch_thresh / (maxv + 1e-6)
     
     # Initialize displacement vectors (global average) and displacement fields (spatial)
     displacement_vectors = np.zeros((T-1, 2))  # (u, v) components
     displacement_fields = np.zeros((T-1, H, W, 2))  # (u, v) at each pixel
+    selected_patch_centers = []  # List to store selected patch centers for each time step
     
     # Create progress bar for displacement computation
     if show_progress:
@@ -386,6 +412,7 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
         # Store patch displacement vectors
         patch_displacements = []
         patch_positions = []
+        time_step_patch_centers = []  # Store centers for this time step
         
         # Process patches
         for i in range(n_patches_y):
@@ -396,13 +423,45 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
                 y_end = y_start + patch_size
                 x_end = x_start + patch_size
                 
-                # Extract patches
-                patch1 = frame1[y_start:y_end, x_start:x_end]
-                patch2 = frame2[y_start:y_end, x_start:x_end]
+                # Calculate actual patch center (for displacement field interpolation)
+                patch_center_y = y_start + patch_size // 2
+                patch_center_x = x_start + patch_size // 2
+                
+                # Extract patches with padding for boundary patches
+                y_start_actual = max(0, y_start)
+                x_start_actual = max(0, x_start)
+                y_end_actual = min(H, y_end)
+                x_end_actual = min(W, x_end)
+                
+                # Extract the actual data within image bounds
+                patch1_data = frame1[y_start_actual:y_end_actual, x_start_actual:x_end_actual]
+                patch2_data = frame2[y_start_actual:y_end_actual, x_start_actual:x_end_actual]
+                
+                # Create full-size patches with padding for boundary patches
+                patch1 = np.zeros((patch_size, patch_size))
+                patch2 = np.zeros((patch_size, patch_size))
+                
+                # Calculate padding offsets
+                y_pad_start = max(0, -y_start)
+                x_pad_start = max(0, -x_start)
+                y_pad_end = patch_size - max(0, y_end - H)
+                x_pad_end = patch_size - max(0, x_end - W)
+                
+                # Fill the patches with actual data
+                patch1[y_pad_start:y_pad_end, x_pad_start:x_pad_end] = patch1_data
+                patch2[y_pad_start:y_pad_end, x_pad_start:x_pad_end] = patch2_data
                 
                 # Skip patches with too little variation
                 if np.std(patch1) < 1e-6 or np.std(patch2) < 1e-6:
                     continue
+                
+                # High-reflectivity patch selection (same logic as training scripts)
+                if use_high_reflectivity_patches:
+                    patch_normalized = np.maximum(patch1, 0) / (maxv + 1e-6)
+                    total_pix = patch_normalized.size
+                    n_above = (patch_normalized > patch_thresh_normalized).sum()
+                    if n_above / total_pix < patch_frac:
+                        continue
                 
                 # Normalize patches for better correlation
                 patch1_norm = (patch1 - np.mean(patch1)) / (np.std(patch1) + 1e-8)
@@ -431,15 +490,17 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
                 u = -(max_idx[1] - (center_x - x_start_search))  # x displacement (horizontal)
                 v = -(max_idx[0] - (center_y - y_start_search))  # y displacement (vertical)
                 
-
-                
                 # Check for invalid values
                 if np.isnan(u) or np.isinf(u) or np.isnan(v) or np.isinf(v):
                     continue
                 
                 # Store patch displacement vector and position
                 patch_displacements.append([u, v])
-                patch_positions.append([y_start + patch_size//2, x_start + patch_size//2])
+                patch_positions.append([patch_center_y, patch_center_x])
+                time_step_patch_centers.append([patch_center_y, patch_center_x])
+        
+        # Store selected patch centers for this time step
+        selected_patch_centers.append(time_step_patch_centers)
         
         # Calculate global displacement vector (average of all patches)
         if len(patch_displacements) > 0:
@@ -454,7 +515,7 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
         else:
             displacement_fields[t] = np.zeros((H, W, 2))
     
-    return displacement_vectors, displacement_fields
+    return displacement_vectors, displacement_fields, selected_patch_centers
 
 def create_displacement_field(patch_displacements, patch_positions, field_shape):
     """
@@ -741,6 +802,11 @@ if __name__ == "__main__":
 
     parser.add_argument('--patch_size', type=int, default=64, help='Patch size for displacement computation (default: 64)')
     parser.add_argument('--patch_stride', type=int, default=32, help='Patch stride for displacement computation (default: 32)')
+    parser.add_argument('--patch_thresh', type=float, default=35.0, help='Threshold for patch selection in dBZ (default: 35.0)')
+    parser.add_argument('--patch_frac', type=float, default=0.025, help='Minimum fraction of pixels above threshold (default: 0.025)')
+    parser.add_argument('--maxv', type=float, default=85.0, help='Maximum value for normalization (default: 85.0)')
+    parser.add_argument('--use_high_reflectivity_patches', action='store_true', default=True, help='Use only patches with high reflectivity (default: True)')
+    parser.add_argument('--no_high_reflectivity_patches', action='store_true', help='Disable high-reflectivity patch selection (use all patches)')
 
     args = parser.parse_args()
 
@@ -777,7 +843,8 @@ if __name__ == "__main__":
         storms = []
         # Extract parameters for detect_storms (exclude displacement-specific args and desc)
         storm_kwargs = {k: v for k, v in kwargs.items() 
-                       if k not in ['desc', 'use_displacement_prediction', 'patch_size', 'patch_stride']}
+                       if k not in ['desc', 'use_displacement_prediction', 'patch_size', 'patch_stride', 
+                                   'patch_thresh', 'patch_frac', 'maxv', 'use_high_reflectivity_patches']}
         
         # Step 1: Detect storms in each frame 
         desc = kwargs.get('desc', 'Detecting storms')
@@ -792,8 +859,11 @@ if __name__ == "__main__":
     # Determine displacement prediction setting
     use_displacement_prediction = args.use_displacement_prediction and not args.no_displacement_prediction
     
+    # Determine high-reflectivity patch setting
+    use_high_reflectivity_patches = args.use_high_reflectivity_patches and not args.no_high_reflectivity_patches
+    
     print('Detecting new storm formations in predictions...')
-    pred_storms = detect_with_progress(
+    pred_result = detect_with_progress(
         pred_cappi,
         reflectivity_threshold=args.reflectivity_threshold,
         area_threshold_km2=args.area_threshold_km2,
@@ -801,9 +871,14 @@ if __name__ == "__main__":
         use_displacement_prediction=use_displacement_prediction,
         patch_size=args.patch_size,
         patch_stride=args.patch_stride,
+        patch_thresh=args.patch_thresh,
+        patch_frac=args.patch_frac,
+        maxv=args.maxv,
+        use_high_reflectivity_patches=use_high_reflectivity_patches,
         desc='Pred storms')
+    
     print('Detecting new storm formations in targets...')
-    tgt_storms = detect_with_progress(
+    tgt_result = detect_with_progress(
         tgt_cappi,
         reflectivity_threshold=args.reflectivity_threshold,
         area_threshold_km2=args.area_threshold_km2,
@@ -811,7 +886,19 @@ if __name__ == "__main__":
         use_displacement_prediction=use_displacement_prediction,
         patch_size=args.patch_size,
         patch_stride=args.patch_stride,
+        patch_thresh=args.patch_thresh,
+        patch_frac=args.patch_frac,
+        maxv=args.maxv,
+        use_high_reflectivity_patches=use_high_reflectivity_patches,
         desc='True storms')
+
+    # Handle different return types based on displacement prediction setting
+    if use_displacement_prediction and len(pred_cappi) > 1:
+        pred_storms, pred_displacement_fields, pred_patch_centers = pred_result
+        tgt_storms, tgt_displacement_fields, tgt_patch_centers = tgt_result
+    else:
+        pred_storms = pred_result
+        tgt_storms = tgt_result
 
     # Evaluate storm initiation predictions
     storm_results = evaluate_new_storm_predictions(pred_storms, tgt_storms, overlap_threshold=args.overlap_threshold)

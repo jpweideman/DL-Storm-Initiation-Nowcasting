@@ -81,10 +81,17 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --area_threshold_km2 10.0 \
        --dilation_iterations 5 \
        --overlap_threshold 0.2 \
-       --use_displacement_prediction
+       --use_displacement_prediction \
+       --patch_size 64 \
+       --patch_stride 32 \
+       --patch_thresh 35 \
+       --patch_frac 0.025 \
+       --maxv 85.0 \
+       --use_high_reflectivity_patches
     ```
    - This will save a JSON file with evaluation metrics for storm initiations and forecasting performance.
    - The displacement-based detection accounts for storm movement caused by wind/advection to reduce false positive new storm detections.
+   - **High-Reflectivity Patch Selection**: By default, displacement vectors are only computed on patches with sufficient high-reflectivity pixels.
 
 6. **Track Experiments**
    - If using Weights & Biases, logs are saved in `experiments/wandb/`.
