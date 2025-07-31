@@ -96,29 +96,22 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 6. **Track Experiments**
    - If using Weights & Biases, logs are saved in `experiments/wandb/`.
 
-## Evaluation Capabilities
+## Evaluations 
 
-### **Storm Initiation Evaluation**
+### **Storm Initiation**
 - **Displacement-Based Detection**: Uses cross-correlation to estimate displacement caused by wind/advection and predict storm positions
 - **Physical Area Calculations**: Storm area measurement in km² accounting for polar coordinate geometry
-- **Multiple Metrics**: Evaluates correct, early, late, and false positive storm detections
+- **Storm Initiation Metrics**: Evaluates correct, early, late, and false positive storm initiations
 
 ### **Forecasting Performance Metrics**
-Comprehensive forecasting evaluation including:
+Forecasting evaluation:
 - **B-MSE (Balanced Mean Squared Error)**: Weighted error metric for different reflectivity ranges
 - **CSI (Critical Success Index)**: For thresholds [2, 5, 10, 30, 45] dBZ
 - **HSS (Heidke Skill Score)**: For thresholds [2, 5, 10, 30, 45] dBZ
 
 ### **Visualization Tools**
-- **Storm Animations**: Visualize storm detection over time
-- **Polar Coordinate Plots**: Proper radar data visualization
-- **Wind-Based Detection Visualization**: See current storms, predicted positions, and new storms
-
-### **Storm Animation Demos**
-
-#### Storm Animation: True vs Predicted
+#### True vs Predicted Storms
 ![Storm Animation Comparison](storm_animation_comparison.gif)
-
-#### Storm Animation: New Storms with Wind
+#### Storms Initiation with Displacement (accouinting for wind)
 ![Storm Animation with Wind](storm_animation_with_wind.gif)
 
