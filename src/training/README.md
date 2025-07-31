@@ -90,7 +90,7 @@ Patch-based training is highly recommended for radar nowcasting of storm initiat
 
 ## Outputs
 - **Checkpoints**: Saved in the run directory.
-- **Arguments**: Saved as `train/test_args.json` in the run directory for reproducibility.
+- **Arguments**: Saved as {train/test}_args.json` in the run directory.
 - **Results**: Results saved in `results/` inside the run directory.
 - **Predictions**: Large data arrays from testing can be saved in a separate directory using `--predictions_dir`.
 
