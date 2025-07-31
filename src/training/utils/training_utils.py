@@ -46,7 +46,7 @@ def weighted_mse_loss(pred, target, threshold=30.0, weight_high=10.0, maxv=85.0,
 
 def b_mse_loss(pred, target, maxv=85.0, eps=1e-6):
     """
-    Compute the B-MSE, using the weighting scheme:
+    Compute the B-MSE (Balanced Mean Squared Error), using the weighting scheme:
     w(x) = 1 if x < 2
            2 if 2 <= x < 5
            5 if 5 <= x < 10
@@ -63,5 +63,6 @@ def b_mse_loss(pred, target, maxv=85.0, eps=1e-6):
     w = torch.where((target_dBZ >= 10) & (target_dBZ < 30), torch.tensor(10.0, device=target.device), w)
     w = torch.where((target_dBZ >= 30) & (target_dBZ < 45), torch.tensor(30.0, device=target.device), w)
     w = torch.where(target_dBZ >= 45, torch.tensor(45.0, device=target.device), w)
-    b_mse = (w * (pred_dBZ - target_dBZ) ** 2).sum() / w.sum()
+    # Return average weighted squared error per sample 
+    b_mse = (w * (pred_dBZ - target_dBZ) ** 2).mean()
     return b_mse 
