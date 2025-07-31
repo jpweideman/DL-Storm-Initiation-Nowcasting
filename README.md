@@ -112,6 +112,6 @@ Forecasting evaluation:
 ### **Visualization Tools**
 #### True vs Predicted Storms
 ![Storm Animation Comparison](storm_animation_comparison.gif)
-#### Storms Initiation with Displacement (Caused by Wind)
+#### Storms Initiation with Displacement (Accounting for Wind)
 ![Storm Animation with Wind](storm_animation_with_wind.gif)
 
