@@ -68,7 +68,7 @@ Add `--use_patches True` to your training or testing command, and optionally adj
 - `--patch_size`: Size of each spatial patch (default: 64)
 - `--patch_stride`: Stride for patch extraction (default: 32)
 - `--patch_thresh`: Minimum normalized reflectivity for a pixel to be considered active (default: 0.35)
-- `--patch_frac`: Minimum fraction of active pixels in a patch (default: 0.05)
+- `--patch_frac`: Minimum fraction of active pixels in a patch (default: 0.01)
 
 **Example:**
 
@@ -79,7 +79,7 @@ python src/training/train_unet_3D_cnn.py train \
   --patch_size 64 \
   --patch_stride 32 \
   --patch_thresh 35 \
-  --patch_frac 0.05
+  --patch_frac 0.01
 ```
 
 Patch-based training is highly recommended for radar nowcasting of storm initiation.

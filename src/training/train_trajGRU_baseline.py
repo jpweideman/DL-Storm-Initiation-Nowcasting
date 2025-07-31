@@ -50,7 +50,7 @@ def train_radar_model(
     patch_size: int = 64,
     patch_stride: int = 64,
     patch_thresh: float = 35.0,
-    patch_frac: float = 0.15,
+    patch_frac: float = 0.01,
     use_patches: bool = False,
     wandb_project: str = "radar-forecasting",
     early_stopping_patience: int = 10,
@@ -94,7 +94,7 @@ def train_radar_model(
         Threshold for weighted MSE (in dBZ).
     loss_weight_high : float
         Weight for high-reflectivity pixels.
-    patch_size, patch_stride, patch_thresh, patch_frac : various
+    patch_size, patch_stride, patch_thresh, patch_frac : various (patch_frac default: 0.01)
         Patch extraction parameters (if use_patches=True).
     use_patches : bool
         Whether to use patch-based training.
@@ -558,7 +558,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--patch_size", type=int, default=64, help="Size of spatial patches to extract (default: 64)")
     train_parser.add_argument("--patch_stride", type=int, default=32, help="Stride for patch extraction (default: 32)")
     train_parser.add_argument("--patch_thresh", type=float, default=35.0, help="Threshold for extracting patches (default: 35.0 dBZ)")
-    train_parser.add_argument("--patch_frac", type=float, default=0.05, help="Minimum fraction of pixels in patch above threshold (default: 0.05)")
+    train_parser.add_argument("--patch_frac", type=float, default=0.01, help="Minimum fraction of pixels in patch above threshold (default: 0.01)")
     train_parser.add_argument("--use_patches", type=str, default="True", help="Whether to use patch-based training: True or False (default: True)")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
     train_parser.add_argument("--no_wandb", action="store_true", help="Disable wandb logging")

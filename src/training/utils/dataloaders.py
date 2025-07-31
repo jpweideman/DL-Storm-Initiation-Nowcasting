@@ -81,7 +81,7 @@ class PatchRadarWindowDataset(Dataset):
     """
     
     def __init__(self, cube, seq_in, seq_out, patch_size=64, patch_stride=64, 
-                 patch_thresh=35, patch_frac=0.15, patch_index_path=None, maxv=85.0):
+                 patch_thresh=35, patch_frac=0.01, patch_index_path=None, maxv=85.0):
         self.cube = cube
         self.seq_in = seq_in
         self.seq_out = seq_out

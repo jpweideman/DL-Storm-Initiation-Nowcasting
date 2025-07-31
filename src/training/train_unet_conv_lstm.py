@@ -41,7 +41,7 @@ def train_radar_model(
     patch_size: int = 64,
     patch_stride: int = 64,
     patch_thresh: float = 35.0,
-    patch_frac: float = 0.15,
+    patch_frac: float = 0.01,
     use_patches: bool = False,
     base_ch: int = 32,
     lstm_hid: int = 64,
@@ -88,7 +88,7 @@ def train_radar_model(
     patch_thresh : float, optional
         Threshold for extracting patches (default: 35.0 dBZ).
     patch_frac : float, optional
-        Minimum fraction of pixels in patch above threshold (default: 0.15).
+        Minimum fraction of pixels in patch above threshold (default: 0.01).
     use_patches : bool, optional
         Whether to use patch-based training (default: False).
     base_ch : int, optional
@@ -468,7 +468,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--patch_size", type=int, default=64, help="Size of spatial patches to extract (default: 64)")
     train_parser.add_argument("--patch_stride", type=int, default=32, help="Stride for patch extraction (default: 32)")
     train_parser.add_argument("--patch_thresh", type=float, default=35, help="Threshold in dBZ for extracting patches (default: 35 dBZ)")
-    train_parser.add_argument("--patch_frac", type=float, default=0.05, help="Minimum fraction of pixels in patch above threshold (default: 0.05)")
+    train_parser.add_argument("--patch_frac", type=float, default=0.01, help="Minimum fraction of pixels in patch above threshold (default: 0.01)")
     train_parser.add_argument("--use_patches", type=str, default="False", help="Whether to use patch-based training: True or False (default: False)")
     train_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net (default: 32)")
     train_parser.add_argument("--lstm_hid", type=str, default="64", help="Number of hidden channels in the ConvLSTM bottleneck (int or tuple/list, e.g., 64 or (64,128))")
