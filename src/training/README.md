@@ -78,7 +78,7 @@ python src/training/train_unet_3D_cnn.py train \
   --use_patches True \
   --patch_size 64 \
   --patch_stride 32 \
-  --patch_thresh 0.35 \
+  --patch_thresh 35 \
   --patch_frac 0.05
 ```
 

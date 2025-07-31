@@ -140,7 +140,7 @@ def train_radar_model(
                 val_idx.append(i)
         train_ds = Subset(full_ds, train_idx)
         val_ds   = Subset(full_ds, val_idx)
-        train_dl = DataLoader(train_ds, batch_size, shuffle=True)
+        train_dl = DataLoader(train_ds, batch_size, shuffle=False)
         val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
         print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}")
     else:

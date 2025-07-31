@@ -138,10 +138,10 @@ def train_radar_model(
     # DataLoaders
     if use_patches:
         patch_index_path = str(save_dir / "patch_indices.npy")
-        full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, maxv, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path)
+        full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
         train_ds = Subset(full_ds, idx_train)
         val_ds   = Subset(full_ds, idx_val)
-        train_dl = DataLoader(train_ds, batch_size, shuffle=True)
+        train_dl = DataLoader(train_ds, batch_size, shuffle=False)
         val_dl   = DataLoader(val_ds,   batch_size, shuffle=False)
         print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}")
     else:

@@ -77,8 +77,8 @@ def compute_b_mse(pred, target):
     w = np.where((target >= 30) & (target < 45), 30.0, w)
     w = np.where(target >= 45, 45.0, w)
     
-    # B-MSE
-    b_mse = np.sum(w * (pred - target) ** 2) / np.sum(w)
+    # B-MSE: normalize by total number of pixels, not sum of weights
+    b_mse = np.mean(w * (pred - target) ** 2)
     return b_mse
 
 def compute_forecasting_metrics(pred, target):

@@ -103,10 +103,13 @@ class PatchRadarWindowDataset(Dataset):
             print(f"Loading patch indices from {patch_index_path}")
             self.patches = np.load(patch_index_path, allow_pickle=True).tolist()
         else:
+            total_patches_checked = 0
+            patches_found = 0
             for t in tqdm(range(last), desc='Extracting patches'):
                 for y in range(0, H - patch_size + 1, patch_stride):
                     for x in range(0, W - patch_size + 1, patch_stride):
                         if y + patch_size <= H and x + patch_size <= W:
+                            total_patches_checked += 1
                             Y_patch = np.maximum(
                                 cube[t+seq_in:t+seq_in+seq_out, :, y:y+patch_size, x:x+patch_size], 0
                             ) / (maxv + 1e-6)
@@ -114,6 +117,17 @@ class PatchRadarWindowDataset(Dataset):
                             n_above = (Y_patch > patch_thresh_normalized).sum()
                             if n_above / total_pix >= patch_frac:
                                 self.patches.append((t, y, x))
+                                patches_found += 1
+            
+            print(f"Patch extraction summary:")
+            print(f"  Total patches checked: {total_patches_checked}")
+            print(f"  Patches found: {patches_found}")
+            
+            if patches_found == 0:
+                print(f"WARNING: No patches found! Consider:")
+                print(f"  - Lowering patch_thresh (currently {patch_thresh})")
+                print(f"  - Lowering patch_frac (currently {patch_frac})")
+                print(f"  - Checking if data has enough high-intensity regions")
             
             if patch_index_path is not None:
                 np.save(patch_index_path, np.array(self.patches, dtype=object))

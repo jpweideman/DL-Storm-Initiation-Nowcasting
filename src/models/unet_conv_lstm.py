@@ -114,7 +114,7 @@ class UNetConvLSTM(nn.Module):
             self.lstm_cell = ConvLSTMCell(base_ch*4, lstm_hid, kernel)
             self.lstm_out_dim = lstm_hid
         # Decoder
-        self.up1 = Up(self.lstm_out_dim, base_ch*2, base_ch*2, kernel)
+        self.up1 = Up(self.lstm_out_dim, base_ch*4, base_ch*2, kernel)  
         self.up2 = Up(base_ch*2, base_ch, base_ch, kernel)
         self.outc = nn.Conv2d(base_ch, out_ch, 1)
 
@@ -130,10 +130,10 @@ class UNetConvLSTM(nn.Module):
             x1 = self.inc(xt)
             x2 = self.down1(x1)
             x3 = self.down2(x2)
-            encoded_features.append(x3)
+            encoded_features.append((x1, x2, x3))  # Store all intermediate features
         
         # Stack encoded features along time dimension
-        encoded_stack = torch.stack(encoded_features, dim=1)  # (B, S, base_ch*4, H//4, W//4)
+        encoded_stack = torch.stack([feat[2] for feat in encoded_features], dim=1)  # (B, S, base_ch*4, H//4, W//4)
         
         # Process through ConvLSTM bottleneck
         if self.lstm_layers is not None:
@@ -149,7 +149,7 @@ class UNetConvLSTM(nn.Module):
                 xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
                 for i, cell in enumerate(self.lstm_layers):
                     h_list[i], c_list[i] = cell(xt, h_list[i], c_list[i])
-                    xt = h_list[i]
+                    xt = h_list[i]  # Feed output of current layer to next layer
             bottleneck_out = h_list[-1]  # Use output from last layer
         else:
             # Single ConvLSTM layer
@@ -160,7 +160,7 @@ class UNetConvLSTM(nn.Module):
             bottleneck_out = h
         
         # Decoder
-        x = self.up1(bottleneck_out, encoded_features[-1])  # Use last encoded features for skip connection
-        x = self.up2(x, encoded_features[0])  # Use first encoded features for skip connection
+        x = self.up1(bottleneck_out, encoded_features[-1][2])  # Use last encoded features (x3) for skip connection
+        x = self.up2(x, encoded_features[0][0])  # Use first encoded features (x1) for skip connection
         x = self.outc(x)
         return x 
