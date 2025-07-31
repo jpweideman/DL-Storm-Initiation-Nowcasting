@@ -233,7 +233,7 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilat
 
     return results
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.0175, maxv=85.0, use_high_reflectivity_patches=True):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, use_high_reflectivity_patches=True):
     """
     Detects new storm formations using displacement-based prediction to account for storm movement.
     
@@ -247,7 +247,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     - patch_size: int - size of patches for cross-correlation (default: 32)
     - patch_stride: int - stride between patches (default: 16)
     - patch_thresh: float - threshold for patch selection in dBZ (default: 35.0)
-    - patch_frac: float - minimum fraction of pixels above threshold (default: 0.0175)
+    - patch_frac: float - minimum fraction of pixels above threshold (default: 0.015)
     - maxv: float - maximum value for normalization (default: 85.0)
     - use_high_reflectivity_patches: bool - whether to only use patches with high reflectivity (default: True)
     
@@ -798,7 +798,7 @@ if __name__ == "__main__":
     parser.add_argument('--patch_size', type=int, default=32, help='Patch size for displacement computation (default: 32)')
     parser.add_argument('--patch_stride', type=int, default=16, help='Patch stride for displacement computation (default: 16)')
     parser.add_argument('--patch_thresh', type=float, default=35.0, help='Threshold for patch selection in dBZ (default: 35.0)')
-    parser.add_argument('--patch_frac', type=float, default=0.0175, help='Minimum fraction of pixels above threshold (default: 0.0175)')
+    parser.add_argument('--patch_frac', type=float, default=0.015, help='Minimum fraction of pixels above threshold (default: 0.015)')
     parser.add_argument('--maxv', type=float, default=85.0, help='Maximum value for normalization (default: 85.0)')
     parser.add_argument('--use_high_reflectivity_patches', action='store_true', default=True, help='Use only patches with high reflectivity (default: True)')
     parser.add_argument('--no_high_reflectivity_patches', action='store_true', help='Disable high-reflectivity patch selection (use all patches)')

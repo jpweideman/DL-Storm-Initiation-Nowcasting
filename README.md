@@ -85,7 +85,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --patch_size 32 \
        --patch_stride 16 \
        --patch_thresh 35 \
-       --patch_frac 0.0175 \
+       --patch_frac 0.015 \
        --maxv 85.0 \
        --use_high_reflectivity_patches
     ```
