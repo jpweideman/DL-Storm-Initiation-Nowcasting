@@ -11,59 +11,17 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import wandb
 import ast
 import os
-import random
 from tqdm import tqdm
 
 from src.models.unet_conv_lstm import UNetConvLSTM
-
-def set_seed(seed=42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-set_seed(42)
-
-# Import centralized dataloaders
+# Import shared utilities
+from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss
+# Import dataloaders
 from src.training.utils import RadarWindowDataset, PatchRadarWindowDataset
 
-
-# Weighted MSE loss
-
-def mse_loss(pred, target, maxv=85.0, eps=1e-6):
-    """
-    Compute MSE in dBZ units.
-    pred, target: normalized (0-1), so convert to dBZ first.
-    """
-    pred_dBZ = pred * (maxv + eps)
-    target_dBZ = target * (maxv + eps)
-    return ((pred_dBZ - target_dBZ) ** 2).mean()
-
-def weighted_mse_loss(pred, target, threshold=30.0, weight_high=10.0, maxv=85.0, eps=1e-6):
-    """
-    Weighted MSE loss in dBZ units, emphasizing high-reflectivity areas.
-    pred, target: normalized (0-1), so convert to dBZ first.
-    threshold: dBZ value above which to apply weight_high (e.g., 30.0)
-    weight_high: weight for pixels above threshold
-    """
-    pred_dBZ = pred * (maxv + eps)
-    target_dBZ = target * (maxv + eps)
-    weight = torch.ones_like(target_dBZ)
-    weight[target_dBZ > threshold] = weight_high
-    return ((pred_dBZ - target_dBZ) ** 2 * weight).mean()
-
+set_seed(123)
 
 # Training function
-
-def atomic_save(obj, path):
-    tmp_path = str(path) + ".tmp"
-    torch.save(obj, tmp_path)
-    os.replace(tmp_path, path)
-
-
 def train_radar_model(
     npy_path: str,
     save_dir: str,
@@ -311,35 +269,6 @@ def train_radar_model(
     print("Done. Checkpoints in", save_dir.resolve())
     if not args.no_wandb:
         wandb.finish()
-
-
-def compute_mse_by_ranges(pred, target, ranges):
-    """
-    Compute MSE for different reflectivity ranges.
-    
-    Parameters:
-    -----------
-    pred: np.ndarray
-        Predicted values
-    target: np.ndarray
-        Ground truth values
-    ranges: list of tuples
-        List of (min, max) ranges to compute MSE for
-        
-    Returns:
-    --------
-    dict
-        Dictionary with MSE values for each range
-    """
-    mse_by_range = {}
-    for r_min, r_max in ranges:
-        mask = (target >= r_min) & (target < r_max)
-        if np.any(mask):
-            mse = np.mean((pred[mask] - target[mask]) ** 2)
-            mse_by_range[f"mse_{r_min}_{r_max}"] = mse
-        else:
-            mse_by_range[f"mse_{r_min}_{r_max}"] = np.nan
-    return mse_by_range
 
 
 def predict_test_set(

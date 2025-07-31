@@ -241,7 +241,7 @@ def animate_new_storms(data, new_storms_result):
 
 def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
                                 dilation_iterations=5, overlap_threshold=0.1, interval=200,
-                                patch_size=64, patch_stride=32, patch_thresh=35.0, patch_frac=0.025, 
+                                patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, 
                                 maxv=85.0, use_high_reflectivity_patches=True):
     """
     Animate new storm detection with displacement-based prediction visualization.
@@ -253,10 +253,10 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     - dilation_iterations: dilation iterations for storm smoothing (default: 5)
     - overlap_threshold: overlap threshold for new storm detection (default: 0.1)
     - interval: animation interval in milliseconds (default: 200)
-    - patch_size: int, size of patches for cross-correlation (default: 64)
-    - patch_stride: int, stride between patches (default: 32)
+    - patch_size: int, size of patches for cross-correlation (default: 32)
+    - patch_stride: int, stride between patches (default: 16)
     - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
-    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.025)
+    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.015)
     - maxv: float, maximum value for normalization (default: 85.0)
     - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
     
@@ -439,7 +439,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
         if frame_id == 0:  # Only add legend once
             from matplotlib.lines import Line2D
             legend_elements = [
-                Line2D([0], [0], color='red', lw=2, label='All Storms'),
+                Line2D([0], [0], color='red', lw=2, label='Storms'),
                 Line2D([0], [0], color='orange', lw=2, linestyle='--', label='Predicted Positions'),
                 Line2D([0], [0], color='lime', lw=2, label='New Storms'),
                 Line2D([0], [0], color='red', lw=1, marker='>', markersize=8, label='Displacement Vectors')

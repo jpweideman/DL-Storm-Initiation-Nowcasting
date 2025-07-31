@@ -11,25 +11,16 @@ import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, Subset
 import wandb
 import os
-import random
 from tqdm import tqdm
 import ast
 
 from src.models.traj_gru import TrajGRU
-
-def set_seed(seed=42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-set_seed(42)
-
-# Import centralized dataloaders
+# Import utilities
+from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss, b_mse_loss
+# Import dataloaders
 from src.training.utils import RadarWindowDataset, PatchRadarWindowDataset
+
+set_seed(123)
 
 # Training function
 def train_radar_model(
@@ -310,34 +301,6 @@ def train_radar_model(
     if not args.no_wandb:
         wandb.finish()
 
-def compute_mse_by_ranges(pred, target, ranges):
-    """
-    Compute MSE for different reflectivity ranges.
-
-    Parameters
-    ----------
-    pred : np.ndarray
-        Predicted values.
-    target : np.ndarray
-        Ground truth values.
-    ranges : list of tuple
-        List of (min, max) ranges to compute MSE for.
-
-    Returns
-    -------
-    dict
-        Dictionary with MSE values for each range.
-    """
-    mse_by_range = {}
-    for r_min, r_max in ranges:
-        mask = (target >= r_min) & (target < r_max)
-        if np.any(mask):
-            mse = np.mean((pred[mask] - target[mask]) ** 2)
-            mse_by_range[f"mse_{r_min}_{r_max}"] = mse
-        else:
-            mse_by_range[f"mse_{r_min}_{r_max}"] = np.nan
-    return mse_by_range
-
 
 def predict_test_set(
     npy_path: str,
@@ -526,59 +489,6 @@ def predict_test_set(
         print(f"Saved mse_by_ranges.json → {results_dir}")
     print("Validation complete.")
     return None
-
-def atomic_save(obj, path):
-    tmp_path = str(path) + ".tmp"
-    torch.save(obj, tmp_path)
-    os.replace(tmp_path, path)
-
-def b_mse_loss(pred, target, maxv=85.0, eps=1e-6):
-    """
-    Compute the B-MSE as described in the paper, using the weighting scheme:
-    w(x) = 1 if x < 2
-           2 if 2 <= x < 5
-           5 if 5 <= x < 10
-           10 if 10 <= x < 30
-           30 if 30 <= x < 45
-           45 if x >= 45
-    pred, target: normalized (0-1), so convert to dBZ first.
-    """
-    # Convert to dBZ
-    pred_dBZ = pred * (maxv + eps)
-    target_dBZ = target * (maxv + eps)
-    # Compute weights
-    w = torch.ones_like(target_dBZ)
-    w = torch.where(target_dBZ < 2, torch.tensor(1.0, device=target.device), w)
-    w = torch.where((target_dBZ >= 2) & (target_dBZ < 5), torch.tensor(2.0, device=target.device), w)
-    w = torch.where((target_dBZ >= 5) & (target_dBZ < 10), torch.tensor(5.0, device=target.device), w)
-    w = torch.where((target_dBZ >= 10) & (target_dBZ < 30), torch.tensor(10.0, device=target.device), w)
-    w = torch.where((target_dBZ >= 30) & (target_dBZ < 45), torch.tensor(30.0, device=target.device), w)
-    w = torch.where(target_dBZ >= 45, torch.tensor(45.0, device=target.device), w)
-    # B-MSE
-    b_mse = (w * (pred_dBZ - target_dBZ) ** 2).sum() / w.sum()
-    return b_mse
-
-def mse_loss(pred, target, maxv=85.0, eps=1e-6):
-    """
-    Compute MSE in dBZ units.
-    pred, target: normalized (0-1), so convert to dBZ first.
-    """
-    pred_dBZ = pred * (maxv + eps)
-    target_dBZ = target * (maxv + eps)
-    return ((pred_dBZ - target_dBZ) ** 2).mean()
-
-def weighted_mse_loss(pred, target, threshold=30.0, weight_high=10.0, maxv=85.0, eps=1e-6):
-    """
-    Weighted MSE loss in dBZ units, emphasizing high-reflectivity areas.
-    pred, target: normalized (0-1), so convert to dBZ first.
-    threshold: dBZ value above which to apply weight_high (e.g., 30.0)
-    weight_high: weight for pixels above threshold
-    """
-    pred_dBZ = pred * (maxv + eps)
-    target_dBZ = target * (maxv + eps)
-    weight = torch.ones_like(target_dBZ)
-    weight[target_dBZ > threshold] = weight_high
-    return ((pred_dBZ - target_dBZ) ** 2 * weight).mean()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train or validate a TrajGRU radar forecasting model.")

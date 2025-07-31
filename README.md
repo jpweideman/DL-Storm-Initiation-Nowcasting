@@ -82,10 +82,10 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --dilation_iterations 5 \
        --overlap_threshold 0.2 \
        --use_displacement_prediction \
-       --patch_size 64 \
-       --patch_stride 32 \
+       --patch_size 32 \
+       --patch_stride 16 \
        --patch_thresh 35 \
-       --patch_frac 0.025 \
+       --patch_frac 0.015 \
        --maxv 85.0 \
        --use_high_reflectivity_patches
     ```
@@ -96,20 +96,22 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 6. **Track Experiments**
    - If using Weights & Biases, logs are saved in `experiments/wandb/`.
 
-## Evaluation Capabilities
+## Evaluations 
 
-### **Storm Initiation Evaluation**
+### **Storm Initiation**
 - **Displacement-Based Detection**: Uses cross-correlation to estimate displacement caused by wind/advection and predict storm positions
 - **Physical Area Calculations**: Storm area measurement in km² accounting for polar coordinate geometry
-- **Multiple Metrics**: Evaluates correct, early, late, and false positive storm detections
+- **Storm Initiation Metrics**: Evaluates correct, early, late, and false positive storm initiations
 
 ### **Forecasting Performance Metrics**
-Comprehensive forecasting evaluation including:
+Forecasting evaluation:
 - **B-MSE (Balanced Mean Squared Error)**: Weighted error metric for different reflectivity ranges
 - **CSI (Critical Success Index)**: For thresholds [2, 5, 10, 30, 45] dBZ
 - **HSS (Heidke Skill Score)**: For thresholds [2, 5, 10, 30, 45] dBZ
 
 ### **Visualization Tools**
-- **Storm Animations**: Visualize storm detection over time
-- **Polar Coordinate Plots**: Proper radar data visualization
-- **Wind-Based Detection Visualization**: See current storms, predicted positions, and new storms
+#### True vs Predicted Storms
+![Storm Animation Comparison](storm_animation_comparison.gif)
+#### Storms Initiation with Displacement (Accounting for Wind)
+![Storm Animation with Wind](storm_animation_with_wind.gif)
+

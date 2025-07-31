@@ -1,13 +1,12 @@
 data/processed/
 data/intermediate/
 predictions/
-__pycache__/
+__pycache__
 experiments/wandb/
 .DS_Store
 
 # runs/
 # wandb/
-data/processed_1/
 runs_old/
 wandb_old/
 *.ipynb

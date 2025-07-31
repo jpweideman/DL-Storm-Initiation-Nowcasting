@@ -8,43 +8,17 @@ from torch.utils.data import Dataset, DataLoader, Subset
 import wandb  # Add wandb import
 import argparse
 import os
-import random
 from tqdm import tqdm
 
 from src.models.conv_lstm_nonnormalized import ConvLSTM
-
-def set_seed(seed=42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-set_seed(42)
-
-def atomic_save(obj, path):
-    tmp_path = str(path) + ".tmp"
-    torch.save(obj, tmp_path)
-    os.replace(tmp_path, path)
-# Dataset – raw dBZ without normalizatio
-# Import centralized dataloaders
+# Import shared utilities
+from src.training.utils import set_seed, atomic_save, weighted_mse_loss
+# Import dataloaders
 from src.training.utils import NonNormalizedRadarWindowDataset as RadarWindowDataset
-# ConvLSTM model is now imported from src.models.conv_lstm_nonnormalized
+
+set_seed(123)
 
 # Training function
-def weighted_mse_loss(pred, target, threshold=40.0, weight_high=10.0):
-    """
-    Weighted MSE loss in dBZ units, emphasizing high-reflectivity areas.
-    pred, target: dBZ units (not normalized).
-    threshold: dBZ value above which to apply weight_high (e.g., 40.0)
-    weight_high: weight for pixels above threshold
-    """
-    weight = torch.ones_like(target)
-    weight[target > threshold] = weight_high
-    return ((pred - target) ** 2 * weight).mean()
-
 def train_radar_model(
     npy_path: str,
     save_dir: str,
