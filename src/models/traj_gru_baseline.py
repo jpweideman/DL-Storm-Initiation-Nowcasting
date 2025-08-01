@@ -12,50 +12,72 @@ class TrajGRUCell(nn.Module):
         self.L = L  # number of allowed flow fields
         self.zoneout = zoneout
         padding = kernel_size // 2
-        self.conv_x = nn.Conv2d(input_channels, hidden_channels * 3, kernel_size, padding=padding)
-        self.conv_h = nn.Conv2d(hidden_channels, hidden_channels * 3, kernel_size, padding=padding)
-        self.conv_flow = nn.Conv2d(input_channels + hidden_channels, 2 * L, kernel_size, padding=padding)
-        self.conv_warp = nn.Conv2d(hidden_channels * L, hidden_channels, 1)
+        
+        # Input to hidden (i2h) - reset_gate, update_gate, new_mem
+        self.i2h = nn.Conv2d(input_channels, hidden_channels * 3, kernel_size, padding=padding)
+        
+        # Hidden to hidden (h2h) - after warping, 1x1 conv
+        self.ret = nn.Conv2d(hidden_channels * L, hidden_channels * 3, 1)
+        
+        # Flow generation - separate layers 
+        self.i2f_conv1 = nn.Conv2d(input_channels, 32, kernel_size=(5, 5), padding=(2, 2))
+        self.h2f_conv1 = nn.Conv2d(hidden_channels, 32, kernel_size=(5, 5), padding=(2, 2))
+        self.flows_conv = nn.Conv2d(32, L * 2, kernel_size=(5, 5), padding=(2, 2))
 
     def forward(self, x, h_prev):
-        flow_input = torch.cat([x, h_prev], dim=1)
-        flows = self.conv_flow(flow_input)
-        flows = flows.chunk(self.L, dim=1)
-        warped_h = []
-        for l in range(self.L):
-            flow = flows[l]
-            h_warped = self._warp(h_prev, flow)
-            warped_h.append(h_warped)
-        h_cat = torch.cat(warped_h, dim=1)
-        h_agg = self.conv_warp(h_cat)
-        x_conv = self.conv_x(x)
-        h_conv = self.conv_h(h_agg)
-        i_x, f_x, o_x = x_conv.chunk(3, dim=1)
-        i_h, f_h, o_h = h_conv.chunk(3, dim=1)
-        i = torch.sigmoid(i_x + i_h)
-        f = torch.sigmoid(f_x + f_h)
-        o = torch.tanh(o_x + o_h)
-        h_new = f * h_agg + i * o
+        # Flow generation 
+        i2f_conv1 = self.i2f_conv1(x)
+        h2f_conv1 = self.h2f_conv1(h_prev)
+        f_conv1 = i2f_conv1 + h2f_conv1
+        f_conv1 = torch.tanh(f_conv1)
+        
+        flows = self.flows_conv(f_conv1)
+        flows = torch.split(flows, 2, dim=1)
+        
+        # Warping
+        warped_data = []
+        for flow in flows:
+            h_warped = self._warp(h_prev, -flow)  # negative flow like original implementation
+            warped_data.append(h_warped)
+        wrapped_data = torch.cat(warped_data, dim=1)
+        
+        # GRU gates 
+        i2h = self.i2h(x)
+        h2h = self.ret(wrapped_data)
+        
+        i2h_slice = torch.split(i2h, self.hidden_channels, dim=1)
+        h2h_slice = torch.split(h2h, self.hidden_channels, dim=1)
+        
+        reset_gate = torch.sigmoid(i2h_slice[0] + h2h_slice[0])
+        update_gate = torch.sigmoid(i2h_slice[1] + h2h_slice[1])
+        new_mem = torch.tanh(i2h_slice[2] + reset_gate * h2h_slice[2])
+        
+        h_new = update_gate * h_prev + (1 - update_gate) * new_mem
+        
         if self.zoneout > 0.0 and self.training:
             mask = torch.empty_like(h_new).bernoulli_(1 - self.zoneout)
-            h_new = mask * h_new + (1 - mask) * h_prev
+            h_new = torch.where(mask, h_new, h_prev)
+        
         return h_new
 
     def _warp(self, x, flow):
         B, C, H, W = x.size()
-        grid_y, grid_x = torch.meshgrid(
-            torch.arange(0, H, device=x.device),
-            torch.arange(0, W, device=x.device),
-            indexing='ij'
-        )
-        grid = torch.stack((grid_x, grid_y), 2).float()
-        grid = grid.unsqueeze(0).repeat(B, 1, 1, 1)
-        flow = flow.permute(0, 2, 3, 1)
-        new_grid = grid + flow
-        new_grid_x = 2.0 * new_grid[..., 0] / max(W - 1, 1) - 1.0
-        new_grid_y = 2.0 * new_grid[..., 1] / max(H - 1, 1) - 1.0
-        new_grid = torch.stack((new_grid_x, new_grid_y), dim=-1)
-        return F.grid_sample(x, new_grid, align_corners=True, padding_mode='border')
+        
+        # Create meshgrid 
+        xx = torch.arange(0, W, device=x.device).view(1, -1).repeat(H, 1)
+        yy = torch.arange(0, H, device=x.device).view(-1, 1).repeat(1, W)
+        xx = xx.view(1, 1, H, W).repeat(B, 1, 1, 1)
+        yy = yy.view(1, 1, H, W).repeat(B, 1, 1, 1)
+        grid = torch.cat((xx, yy), 1).float()
+        
+        vgrid = grid + flow
+        
+        # Scale grid to [-1,1] 
+        vgrid[:, 0, :, :] = 2.0 * vgrid[:, 0, :, :].clone() / max(W - 1, 1) - 1.0
+        vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :].clone() / max(H - 1, 1) - 1.0
+        vgrid = vgrid.permute(0, 2, 3, 1)
+        
+        return F.grid_sample(x, vgrid, align_corners=True, padding_mode='border')
 
 class TrajGRUEncoderDecoder(nn.Module):
     """

@@ -538,7 +538,7 @@ def predict_test_set(
     return None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train or test a symmetric TrajGRU encoder-forecaster model (no U-Net, no skip connections).\n\nSpecify architecture using comma-separated lists for each argument. Example:\n\n--hidden_channels 8,64,192 --kernel_size 3,3,3 --L 13,13,9 --conv_kernels 7,5,3 --conv_strides 5,3,2\n\nThis will create a 3-layer encoder and 3-layer decoder, with decoder using reversed parameters.")
+    parser = argparse.ArgumentParser(description="Train or test a symmetric TrajGRU encoder-forecaster model (no U-Net, no skip connections).\n\nSpecify architecture using comma-separated lists for each argument. Example:\n\n--hidden_channels 64,192,192 --kernel_size 3,3,3 --L 13,13,9 --conv_kernels 5,5,3 --conv_strides 3,2,1\n\nThis will create a 3-layer encoder and 3-layer decoder, with decoder using reversed parameters.\n\n⚠️  IMPORTANT: Large strides (>3) can cause blank predictions due to excessive information loss. Use smaller strides for better results.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Train subparser
@@ -567,7 +567,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--kernel_size", type=str, required=True, help="Comma-separated list of kernel sizes for each layer (encoder+decoder, symmetric)")
     train_parser.add_argument("--L", type=str, required=True, help="Comma-separated list of L values for each layer (encoder+decoder, symmetric)")
     train_parser.add_argument("--conv_kernels", type=str, required=True, help="Comma-separated list of kernel sizes for encoder Conv2d/decoder ConvTranspose2d (symmetric)")
-    train_parser.add_argument("--conv_strides", type=str, required=True, help="Comma-separated list of strides for encoder Conv2d/decoder ConvTranspose2d (symmetric)")
+    train_parser.add_argument("--conv_strides", type=str, required=True, help="Comma-separated list of strides for encoder Conv2d/decoder ConvTranspose2d (symmetric). WARNING: Be careful, large strides can cause blank predictions")
 
     # Test subparser
     test_parser = subparsers.add_parser("test", help="Test the model (inference)")
