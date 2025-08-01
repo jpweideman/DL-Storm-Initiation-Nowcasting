@@ -463,7 +463,7 @@ def predict_test_set(
 
     idx = 0
     with torch.no_grad():
-        for xb, yb in tqdm(dl, desc='Validating', total=len(dl)):
+        for xb, yb in tqdm(dl, desc='Testing', total=len(dl)):
             xb = xb.to(device)
             xb = xb.permute(0, 2, 1, 3, 4)  # (B, C, D, H, W)
             

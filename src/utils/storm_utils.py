@@ -171,14 +171,14 @@ def compute_polar_pixel_areas(shape, pixel_spacing_km=0.5):
     
     return areas
 
-def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5):
+def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5):
     """
     Detects storms in radar data using physical area calculations for polar coordinates.
 
     Parameters:
     - data: ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
     - reflectivity_threshold: threshold for storm detection (dBZ)
-    - area_threshold_km2: minimum storm area in km² (default: 5.0 km²)
+    - area_threshold_km2: minimum storm area in km² (default: 10.0 km²)
     - dilation_iterations: dilation iterations for storm smoothing
 
     Returns:
@@ -233,14 +233,14 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilat
 
     return results
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=5.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, use_high_reflectivity_patches=True):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, use_high_reflectivity_patches=True, max_displacement=100):
     """
     Detects new storm formations using displacement-based prediction to account for storm movement.
     
     Parameters:
     - data: np.ndarray of shape (T, H, W) - radar reflectivity data over time
     - reflectivity_threshold: float - dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: float - minimum storm area in km² (default: 5.0)
+    - area_threshold_km2: float - minimum storm area in km² (default: 10.0)
     - dilation_iterations: int - number of dilation iterations for storm smoothing (default: 5)
     - overlap_threshold: float - overlap threshold for determining if a storm is new (default: 0.1)
     - use_displacement_prediction: bool - whether to use displacement-based prediction (default: True)
@@ -250,6 +250,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     - patch_frac: float - minimum fraction of pixels above threshold (default: 0.015)
     - maxv: float - maximum value for normalization (default: 85.0)
     - use_high_reflectivity_patches: bool - whether to only use patches with high reflectivity (default: True)
+    - max_displacement: int - maximum expected displacement in pixels (default: 100)
     
     Returns:
     - If use_displacement_prediction=True: tuple of (new_storms_summary, displacement_fields, selected_patch_centers)
@@ -264,6 +265,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             data, 
             patch_size=patch_size,
             patch_stride=patch_stride,
+            max_displacement=max_displacement,
             patch_thresh=patch_thresh,
             patch_frac=patch_frac,
             maxv=maxv,
@@ -356,7 +358,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
         
         return new_storms_summary
 
-def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displacement=20, show_progress=True, 
+def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displacement=100, show_progress=True, 
                                 patch_thresh=35.0, patch_frac=0.025, maxv=85.0, use_high_reflectivity_patches=True):
     """
     Compute displacement vectors using patch-based cross-correlation between consecutive frames.
@@ -366,7 +368,7 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
     - data: np.ndarray of shape (T, H, W) - radar reflectivity data
     - patch_size: int, size of patches for cross-correlation (default: 64)
     - patch_stride: int, stride between patches (default: 32)
-    - max_displacement: int, maximum expected displacement in pixels (default: 20)
+    - max_displacement: int, maximum expected displacement in pixels (default: 100)
     - show_progress: bool, whether to show progress bar (default: True)
     - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
     - patch_frac: float, minimum fraction of pixels above threshold (default: 0.025)
@@ -790,7 +792,7 @@ if __name__ == "__main__":
     parser.add_argument('--out', type=str, required=True, help='Output JSON file for evaluation results')
     parser.add_argument('--overlap_threshold', type=float, default=0.2, help='Overlap threshold for matching storms (default: 0.2)')
     parser.add_argument('--reflectivity_threshold', type=float, default=45, help='Reflectivity threshold for storm detection (default: 45)')
-    parser.add_argument('--area_threshold_km2', type=float, default=5.0, help='Area threshold for storm detection in km² (default: 5.0)')
+    parser.add_argument('--area_threshold_km2', type=float, default=10.0, help='Area threshold for storm detection in km² (default: 10.0)')
     parser.add_argument('--dilation_iterations', type=int, default=5, help='Dilation iterations for storm detection (default: 5)')
     parser.add_argument('--use_displacement_prediction', action='store_true', default=True, help='Use displacement-based prediction for new storm detection (default: True)')
     parser.add_argument('--no_displacement_prediction', action='store_true', help='Disable displacement-based prediction (use overlap-based method)')
