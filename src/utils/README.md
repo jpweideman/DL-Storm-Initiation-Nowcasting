@@ -63,7 +63,6 @@ The displacement vectors represent **pixel displacement caused by wind/advection
 ### **Parameters**
 - `patch_size`: Size of patches for cross-correlation (default: 64)
 - `patch_stride`: Stride between patches (default: 32)
-- `max_displacement`: Maximum expected displacement in pixels (default: 20)
 
 ## High-Reflectivity Patch Selection
 

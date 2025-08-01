@@ -109,9 +109,9 @@ Forecasting evaluation:
 - *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ
 - *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ
 
-### **Visualization Tools**
+### **Visualizations**
 #### True vs Predicted Storms
 ![Storm Animation Comparison](storm_animation_comparison.gif)
-#### Storms Initiation with Displacement (Accounting for Wind)
+#### Storms with Displacement (Accounting for Wind)
 ![Storm Animation with Wind](storm_animation_with_wind.gif)
 
