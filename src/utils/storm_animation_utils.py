@@ -23,7 +23,7 @@ def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dil
     cmap = plt.get_cmap("jet")
     img = ax.imshow(data[0], cmap=cmap, vmin=0, vmax=80)
     plt.colorbar(img, ax=ax, label="Reflectivity (dBZ)")
-    title = ax.set_title("Radar Reflectivity - Time Step 0")
+    title = ax.set_title("Radar Reflectivity - Time Step 1")
     storm_lines = []
     # Compute pixel areas for the radar geometry
     pixel_areas = compute_polar_pixel_areas(data.shape[1:])
@@ -32,7 +32,7 @@ def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dil
         nonlocal storm_lines
         frame_data = data[frame]
         img.set_data(frame_data)
-        title.set_text(f"Radar Reflectivity - Time Step {frame}")
+        title.set_text(f"Radar Reflectivity - Time Step {frame+1}")
         for line in storm_lines:
             line.remove()
         storm_lines = []
@@ -77,7 +77,7 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
     norm = Normalize(vmin=0, vmax=80)
     cmap = plt.get_cmap("jet")
     quad = ax.pcolormesh(theta_grid, r_grid, data[0], cmap=cmap, norm=norm)
-    title = ax.set_title("Radar Reflectivity - Time Step 0")
+    title = ax.set_title("Radar Reflectivity - Time Step 1")
     storm_lines = []
     storm_patch = mpatches.Patch(color='red', label='Detected Storm')
     cbar = fig.colorbar(quad, ax=ax, pad=0.1)
@@ -91,7 +91,7 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
         nonlocal storm_lines
         frame_data = data[frame]
         quad.set_array(frame_data.ravel())
-        title.set_text(f"Radar Reflectivity - Time Step {(frame*5)//60}:{frame*5%60:02d}")
+        title.set_text(f"Radar Reflectivity - Time Step {frame+1}")
         for line in storm_lines:
             line.remove()
         storm_lines = []
@@ -199,32 +199,57 @@ def animate_storms_polar_comparison(true_data, pred_data, storm_threshold=45, ar
     ani = animation.FuncAnimation(fig, update, frames=T, interval=interval)
     return ani
 
-def animate_new_storms(data, new_storms_result):
+def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
+                      dilation_iterations=5, overlap_threshold=0.2, interval=200,
+                      use_displacement_prediction=True, patch_size=32, patch_stride=16, 
+                      patch_thresh=35.0, patch_frac=0.015, maxv=85.0, 
+                      use_high_reflectivity_patches=True):
     """
     Animate the progression of newly formed storms over time using radar reflectivity data.
     
     Parameters:
     - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - new_storms_result (list of dict): A list where each dict represents new storms at a specific time step.
-        Each dict should have the keys:
-        - "time_step" (int): Time step index.
-        - "new_storm_count" (int): Number of new storms detected at that time step.
-        - "new_storm_coordinates" (list of list of (x, y)): List of contours for each new storm.
-        - "storm_areas_km2" (list of float): Physical areas of detected storms in km².
+    - reflectivity_threshold: float, dBZ threshold for storm detection (default: 45)
+    - area_threshold_km2: float, minimum storm area in km² (default: 10.0)
+    - dilation_iterations: int, dilation iterations for storm smoothing (default: 5)
+    - overlap_threshold: float, overlap threshold for new storm detection (default: 0.2)
+    - interval: int, animation interval in milliseconds (default: 200)
+    - use_displacement_prediction: bool, whether to use displacement-based prediction (default: True)
+    - patch_size: int, size of patches for cross-correlation (default: 32)
+    - patch_stride: int, stride between patches (default: 16)
+    - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
+    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.015)
+    - maxv: float, maximum value for normalization (default: 85.0)
+    - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
+    
     Returns:
     - ani: matplotlib.animation.FuncAnimation object
     """
+    # Get new storm formations
+    new_storms_result = detect_new_storm_formations(
+        data, reflectivity_threshold, area_threshold_km2, 
+        dilation_iterations, overlap_threshold, use_displacement_prediction=use_displacement_prediction,
+        patch_size=patch_size, patch_stride=patch_stride,
+        patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv,
+        use_high_reflectivity_patches=use_high_reflectivity_patches
+    )
+    
+    # Handle different return types from detect_new_storm_formations
+    if isinstance(new_storms_result, tuple):
+        new_storms_result = new_storms_result[0]  # Extract just the new storms summary
+    
     fig, ax = plt.subplots(figsize=(6, 7))
     cmap = plt.get_cmap("jet")
     img = ax.imshow(data[0], cmap=cmap, vmin=0, vmax=80)
-    title = ax.set_title("New Storms at Time Step 0")
+    title = ax.set_title("New Storms - Time Step 1")
     colorbar = plt.colorbar(img, ax=ax, label="Reflectivity (dBZ)")
     storm_lines = []
+    
     def update(frame_id):
         nonlocal storm_lines
         frame = data[frame_id]
         img.set_data(frame)
-        title.set_text(f"New Storms at Time Step {frame_id}")
+        title.set_text(f"New Storms - Time Step {frame_id+1}")
         for line in storm_lines:
             line.remove()
         storm_lines = []
@@ -235,8 +260,9 @@ def animate_new_storms(data, new_storms_result):
                 line, = ax.plot(contour[:, 0], contour[:, 1], color='lime', linewidth=2)
                 storm_lines.append(line)
         return [img, title] + storm_lines
+    
     plt.close(fig)
-    ani = animation.FuncAnimation(fig, update, frames=data.shape[0], interval=200)
+    ani = animation.FuncAnimation(fig, update, frames=data.shape[0], interval=interval)
     return ani 
 
 def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
@@ -267,7 +293,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     fig, ax = plt.subplots(figsize=(6, 7))
     cmap = plt.get_cmap("jet")
     img = ax.imshow(data[0], cmap=cmap, vmin=0, vmax=80, extent=[0, data.shape[2], data.shape[1], 0])
-    title = ax.set_title("Displacement-Based New Storm Detection - Time Step 0")
+    title = ax.set_title("Displacement-Based New Storm Detection - Time Step 1")
     colorbar = plt.colorbar(img, ax=ax, label="Reflectivity (dBZ)")
     
     # Set proper axis limits 
@@ -328,7 +354,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
         
         frame = data[frame_id]
         img.set_data(frame)
-        title.set_text(f"Displacement-Based New Storm Detection - Time Step {frame_id}")
+        title.set_text(f"Displacement-Based New Storm Detection - Time Step {frame_id+1}")
         
         # Get current storms
         current_storms = storm_results[frame_id]
