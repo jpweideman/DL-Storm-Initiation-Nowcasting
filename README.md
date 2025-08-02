@@ -81,6 +81,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --area_threshold_km2 10.0 \
        --dilation_iterations 5 \
        --overlap_threshold 0.2 \
+       --storm_tracking_overlap_threshold 0.2 \
        --use_displacement_prediction \
        --patch_size 32 \
        --patch_stride 16 \

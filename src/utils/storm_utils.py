@@ -13,19 +13,13 @@ def compute_csi_hss(pred, target, threshold):
     """
     Compute CSI (Critical Success Index) and HSS (Heidke Skill Score) for a given threshold.
     
-    Parameters
-    ----------
-    pred : np.ndarray
-        Predicted values in dBZ.
-    target : np.ndarray
-        Ground truth values in dBZ.
-    threshold : float
-        Threshold in dBZ to convert to binary (0/1).
-        
-    Returns
-    -------
-    tuple
-        (CSI, HSS) scores.
+    Parameters:
+    - pred: np.ndarray, predicted values in dBZ
+    - target: np.ndarray, ground truth values in dBZ
+    - threshold: float, threshold in dBZ to convert to binary (0/1)
+    
+    Returns:
+    - tuple: (CSI, HSS) scores
     """
     # Convert to binary using threshold
     pred_binary = (pred >= threshold).astype(int)
@@ -56,17 +50,12 @@ def compute_b_mse(pred, target):
     """
     Compute B-MSE (Balanced Mean Squared Error) using the same weighting scheme as in training.
     
-    Parameters
-    ----------
-    pred : np.ndarray
-        Predicted values in dBZ.
-    target : np.ndarray
-        Ground truth values in dBZ.
-        
-    Returns
-    -------
-    float
-        B-MSE value.
+    Parameters:
+    - pred: np.ndarray, predicted values in dBZ
+    - target: np.ndarray, ground truth values in dBZ
+    
+    Returns:
+    - float: B-MSE value
     """
     # Compute weights based on dBZ values directly
     w = np.ones_like(target)
@@ -85,17 +74,12 @@ def compute_forecasting_metrics(pred, target):
     """
     Compute comprehensive forecasting metrics including CSI, HSS, and B-MSE.
     
-    Parameters
-    ----------
-    pred : np.ndarray
-        Predicted values in dBZ.
-    target : np.ndarray
-        Ground truth values in dBZ.
-        
-    Returns
-    -------
-    dict
-        Dictionary containing all metrics:
+    Parameters:
+    - pred: np.ndarray, predicted values in dBZ
+    - target: np.ndarray, ground truth values in dBZ
+    
+    Returns:
+    - dict: dictionary containing all metrics:
         - 'b_mse': Balanced Mean Squared Error
         - 'csi_by_threshold': CSI scores for thresholds [2, 5, 10, 30, 45] dBZ
         - 'hss_by_threshold': HSS scores for thresholds [2, 5, 10, 30, 45] dBZ
@@ -110,11 +94,11 @@ def compute_forecasting_metrics(pred, target):
     
     for th in thresholds:
         csi, hss = compute_csi_hss(pred, target, th)
-        csi_by_threshold[f"csi_{th}"] = float(csi)  # Convert to Python float
-        hss_by_threshold[f"hss_{th}"] = float(hss)  # Convert to Python float
+        csi_by_threshold[f"csi_{th}"] = float(csi)  
+        hss_by_threshold[f"hss_{th}"] = float(hss)  
     
     return {
-        "b_mse": float(b_mse_value),  # Convert to Python float
+        "b_mse": float(b_mse_value),  
         "csi_by_threshold": csi_by_threshold,
         "hss_by_threshold": hss_by_threshold
     }
@@ -123,19 +107,14 @@ def compute_polar_pixel_areas(shape, pixel_spacing_km=0.5):
     """
     Compute the physical area (in km²) of each pixel in polar radar coordinates.
     
-    Parameters
-    ----------
-    shape : tuple
-        Shape of the radar data (azimuth_bins, range_bins) where:
+    Parameters:
+    - shape: tuple, shape of the radar data (azimuth_bins, range_bins) where:
         - azimuth_bins: number of azimuth angles (typically 360)
         - range_bins: number of range bins at pixel_spacing_km intervals
-    pixel_spacing_km : float
-        Distance between pixels in km (default: 0.5 km)
-        
-    Returns
-    -------
-    np.ndarray
-        Array of shape (azimuth_bins, range_bins) containing the area of each pixel in km²
+    - pixel_spacing_km: float, distance between pixels in km (default: 0.5)
+    
+    Returns:
+    - np.ndarray: array of shape (azimuth_bins, range_bins) containing the area of each pixel in km²
     """
     azimuth_bins, range_bins = shape
     
@@ -146,7 +125,7 @@ def compute_polar_pixel_areas(shape, pixel_spacing_km=0.5):
     # Convert azimuths to radians
     azimuths_rad = np.radians(azimuths)
     
-    # Create meshgrid - CORRECTED: azimuth first, range second
+    # Create meshgrid - azimuth first, range second
     A, R = np.meshgrid(azimuths_rad, ranges, indexing='ij')  # (azimuth_bins, range_bins)
     
     # Compute pixel areas using polar geometry
@@ -161,7 +140,7 @@ def compute_polar_pixel_areas(shape, pixel_spacing_km=0.5):
         r1 = j * pixel_spacing_km
         r2 = (j + 1) * pixel_spacing_km
         
-        # Angular width of each pixel (in radians)
+        # Angular width of each pixel in radians
         delta_theta = 2 * np.pi / azimuth_bins
         
         # Area of this pixel
@@ -176,13 +155,13 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dila
     Detects storms in radar data using physical area calculations for polar coordinates.
 
     Parameters:
-    - data: ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - reflectivity_threshold: threshold for storm detection (dBZ)
-    - area_threshold_km2: minimum storm area in km² (default: 10.0 km²)
-    - dilation_iterations: dilation iterations for storm smoothing
+    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
+    - reflectivity_threshold: float, threshold for storm detection in dBZ (default: 45)
+    - area_threshold_km2: float, minimum storm area in km² (default: 10.0)
+    - dilation_iterations: int, dilation iterations for storm smoothing (default: 5)
 
     Returns:
-    - List of dictionaries containing storm count and coordinates per frame.
+    - list: list of dictionaries containing storm count and coordinates per frame
     """
     # Compute pixel areas for the radar geometry
     pixel_areas = compute_polar_pixel_areas(data.shape[1:])
@@ -221,19 +200,158 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dila
                     "physical_area_km2": float(physical_area)
                 })
 
+        # include area/duration lists, even if empty
         frame_result = {
             "time_step": t,
             "storm_count": len(storms_in_frame),
             "storm_coordinates": [s["contour"] for s in storms_in_frame],
             "storm_masks": [s["mask"] for s in storms_in_frame],
             "storm_areas_km2": [s["physical_area_km2"] for s in storms_in_frame],
+            "storm_durations_frames": [1.0 for _ in storms_in_frame]  
         }
 
         results.append(frame_result)
 
     return results
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.1, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, use_high_reflectivity_patches=True, max_displacement=100):
+def calculate_storm_durations(storm_results, overlap_threshold=0.2):
+    """
+    Calculate storm durations by tracking storms across time steps.
+    
+    Parameters:
+    - storm_results: list, list of dicts from detect_storms()
+    - overlap_threshold: float, minimum overlap ratio to consider storms as the same (default: 0.2)
+    
+    Returns:
+    - list: list of dicts with duration information added
+    """
+    if not storm_results:
+        return storm_results
+    
+    # Create a mapping of storm tracks
+    storm_tracks = {}  # track_id -> [(time_step, storm_idx, area, contour), ...]
+    next_track_id = 0
+    
+    for t, frame_result in enumerate(storm_results):
+        current_storms = []
+        for i, (contour, area) in enumerate(zip(frame_result["storm_coordinates"], frame_result["storm_areas_km2"])):
+            current_storms.append({
+                "contour": contour,
+                "area": area,
+                "storm_idx": i
+            })
+        
+        # Try to match with existing tracks
+        matched_current = set()
+        for track_id, track in storm_tracks.items():
+            if not track:  # Skip empty tracks
+                continue
+            last_time, last_idx, last_area, last_contour = track[-1]
+            
+            # Only look at storms from the previous time step
+            if last_time != t - 1:
+                continue
+                
+            # Find best match for this track
+            best_match = None
+            best_overlap = 0
+            
+            for current_storm in current_storms:
+                if current_storm["storm_idx"] in matched_current:
+                    continue
+                    
+                # Calculate overlap between contours
+                overlap = calculate_contour_overlap(last_contour, current_storm["contour"])
+                
+                if overlap > best_overlap and overlap > overlap_threshold:
+                    best_overlap = overlap
+                    best_match = current_storm
+            
+            if best_match is not None:
+                # Extend the track
+                track.append((t, best_match["storm_idx"], best_match["area"], best_match["contour"]))
+                matched_current.add(best_match["storm_idx"])
+        
+        # Create new tracks for unmatched storms
+        for current_storm in current_storms:
+            if current_storm["storm_idx"] not in matched_current:
+                storm_tracks[next_track_id] = [(t, current_storm["storm_idx"], current_storm["area"], current_storm["contour"])]
+                next_track_id += 1
+    
+    # Calculate durations and update storm_results
+    for track_id, track in storm_tracks.items():
+        duration = len(track)
+        for time_step, storm_idx, area, contour in track:
+            if storm_idx < len(storm_results[time_step]["storm_durations_frames"]):
+                storm_results[time_step]["storm_durations_frames"][storm_idx] = float(duration)
+    
+    return storm_results
+
+def calculate_contour_overlap(contour1, contour2, data_shape=None):
+    """
+    Calculate overlap between two storm contours using mask intersection.
+    
+    Parameters:
+    - contour1: list, list of (x, y) coordinates for first contour
+    - contour2: list, list of (x, y) coordinates for second contour
+    - data_shape: tuple, (height, width) for creating masks. If None, will estimate from contours (default: None)
+    
+    Returns:
+    - float: overlap ratio (0 to 1)
+    """
+    try:
+        # Convert to numpy arrays
+        c1 = np.array(contour1)
+        c2 = np.array(contour2)
+        
+        # Estimate data shape if not provided
+        if data_shape is None:
+            max_x = max(np.max(c1[:, 0]) if c1.size > 0 else 0, 
+                       np.max(c2[:, 0]) if c2.size > 0 else 0)
+            max_y = max(np.max(c1[:, 1]) if c1.size > 0 else 0, 
+                       np.max(c2[:, 1]) if c2.size > 0 else 0)
+            data_shape = (int(max_y) + 1, int(max_x) + 1)
+        
+        # Create masks for both contours
+        def contour_to_mask(contour, shape):
+            if len(contour) == 0:
+                return np.zeros(shape, dtype=bool)
+            
+            from matplotlib.path import Path as MplPath
+            # Ensure shape is a 2-tuple
+            if len(shape) == 1:
+                shape = (shape[0], 1)
+            elif len(shape) == 0:
+                shape = (1, 1)
+            xg, yg = np.meshgrid(np.arange(shape[1]), np.arange(shape[0]))
+            coords = np.vstack((xg.ravel(), yg.ravel())).T
+            path = MplPath(np.array(contour))
+            mask = path.contains_points(coords).reshape(shape)
+            return mask
+        
+        mask1 = contour_to_mask(c1, data_shape)
+        mask2 = contour_to_mask(c2, data_shape)
+        
+        # Calculate intersection and union
+        intersection = np.sum(mask1 & mask2)
+        area1 = np.sum(mask1)
+        area2 = np.sum(mask2)
+        
+        # Calculate overlap ratio (intersection over the smaller area)
+        if area1 == 0 or area2 == 0:
+            return 0.0
+        
+        # Use the same method as evaluate_new_storm_predictions: intersection / smaller_area
+        smaller_area = min(area1, area2)
+        overlap = intersection / smaller_area if smaller_area > 0 else 0.0
+        
+        return float(overlap)
+            
+    except Exception as e:
+        print(f"Warning: Error calculating contour overlap: {e}")
+        return 0.0
+
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, use_high_reflectivity_patches=True, max_displacement=100):
     """
     Detects new storm formations using displacement-based prediction to account for storm movement.
     
@@ -242,7 +360,8 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     - reflectivity_threshold: float - dBZ threshold for storm detection (default: 45)
     - area_threshold_km2: float - minimum storm area in km² (default: 10.0)
     - dilation_iterations: int - number of dilation iterations for storm smoothing (default: 5)
-    - overlap_threshold: float - overlap threshold for determining if a storm is new (default: 0.1)
+    - overlap_threshold: float - overlap threshold for determining if a storm is new (default: 0.2)
+    - storm_tracking_overlap_threshold: float - overlap threshold for tracking storms across time steps (default: 0.2)
     - use_displacement_prediction: bool - whether to use displacement-based prediction (default: True)
     - patch_size: int - size of patches for cross-correlation (default: 32)
     - patch_stride: int - stride between patches (default: 16)
@@ -257,6 +376,10 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     - If use_displacement_prediction=False: new_storms_summary only
     """
     storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
+    
+    # Calculate storm durations by tracking storms across time steps
+    storm_results = calculate_storm_durations(storm_results, overlap_threshold=storm_tracking_overlap_threshold)
+    
     new_storms_summary = []
 
     if use_displacement_prediction and len(data) > 1:
@@ -280,6 +403,8 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             new_coords = []
             current_masks = frame_result['storm_masks']
             current_coords = frame_result['storm_coordinates']
+            current_areas = frame_result.get('storm_areas_km2', [])
+            current_durations = frame_result.get('storm_durations_frames', [])
 
             if t > 0 and len(previous_masks) > 0:
                 # Predict where previous storms should be based on displacement field
@@ -306,10 +431,25 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
                 new_count = len(current_masks)
                 new_coords = current_coords
 
+            # Get areas and durations for new storms
+            new_areas = []
+            new_durations = []
+            for i, coord in enumerate(new_coords):
+                # Try to match by index (since order is preserved)
+                if i < len(current_areas) and i < len(current_durations):
+                    new_areas.append(current_areas[i])
+                    new_durations.append(current_durations[i])
+                else:
+                    print(f"WARNING: Could not find area/duration for coordinate {coord} at t={t}")
+                    new_areas.append(None)
+                    new_durations.append(None)
+            
             new_storms_summary.append({
                 'time_step': t,
                 'new_storm_count': new_count,
-                'new_storm_coordinates': new_coords
+                'new_storm_coordinates': new_coords,
+                'storm_areas_km2': new_areas,
+                'storm_durations_frames': new_durations
             })
             
             # Update previous masks for next iteration
@@ -325,6 +465,8 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             new_coords = []
             current_masks = frame_result['storm_masks']
             current_coords = frame_result['storm_coordinates']
+            current_areas = frame_result.get('storm_areas_km2', [])
+            current_durations = frame_result.get('storm_durations_frames', [])
 
             if t > 0 and len(previous_masks) > 0:
                 # Check each current storm against previous storms
@@ -347,10 +489,25 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
                 new_count = len(current_masks)
                 new_coords = current_coords
 
+            # Get areas and durations for new storms
+            new_areas = []
+            new_durations = []
+            for i, coord in enumerate(new_coords):
+                # Try to match by index (since order is preserved)
+                if i < len(current_areas) and i < len(current_durations):
+                    new_areas.append(current_areas[i])
+                    new_durations.append(current_durations[i])
+                else:
+                    print(f"WARNING: Could not find area/duration for coordinate {coord} at t={t}")
+                    new_areas.append(None)
+                    new_durations.append(None)
+            
             new_storms_summary.append({
                 'time_step': t,
                 'new_storm_count': new_count,
-                'new_storm_coordinates': new_coords
+                'new_storm_coordinates': new_coords,
+                'storm_areas_km2': new_areas,
+                'storm_durations_frames': new_durations
             })
             
             # Update previous masks for next iteration
@@ -519,12 +676,12 @@ def create_displacement_field(patch_displacements, patch_positions, field_shape)
     Create a displacement field by interpolating patch displacement vectors.
     
     Parameters:
-    - patch_displacements: list of [u, v] displacement vectors for each patch
-    - patch_positions: list of [y, x] positions for each patch
-    - field_shape: tuple (H, W) - shape of the displacement field
+    - patch_displacements: list, list of [u, v] displacement vectors for each patch
+    - patch_positions: list, list of [y, x] positions for each patch
+    - field_shape: tuple, (H, W) shape of the displacement field
     
     Returns:
-    - displacement_field: np.ndarray of shape (H, W, 2) - interpolated displacement field
+    - np.ndarray: displacement field of shape (H, W, 2) - interpolated displacement field
     """
     H, W = field_shape
     displacement_field = np.zeros((H, W, 2))
@@ -568,12 +725,12 @@ def predict_storm_positions(previous_storms, displacement_field, data_shape):
     Predict where storms from the previous frame should be in the current frame based on displacement field.
     
     Parameters:
-    - previous_storms: list of storm masks from previous frame
-    - displacement_field: np.ndarray of shape (H, W, 2) - displacement field with (u, v) components at each pixel
-    - data_shape: tuple - (H, W) shape of the data
+    - previous_storms: list, list of storm masks from previous frame
+    - displacement_field: np.ndarray of shape (H, W, 2), displacement field with (u, v) components at each pixel
+    - data_shape: tuple, (H, W) shape of the data
     
     Returns:
-    - predicted_masks: list of predicted storm masks
+    - list: list of predicted storm masks
     """
     H, W = data_shape
     
@@ -618,12 +775,12 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     Compares predicted and true new storm initiations.
 
     Parameters:
-    - new_storms_pred: list of dicts from detect_new_storm_formations(pred_max_cappi)
-    - new_storms_true: list of dicts from detect_new_storm_formations(true_max_cappi)
-    - overlap_threshold: float, minimum overlap ratio to count as a match
+    - new_storms_pred: list, list of dicts from detect_new_storm_formations(pred_max_cappi)
+    - new_storms_true: list, list of dicts from detect_new_storm_formations(true_max_cappi)
+    - overlap_threshold: float, minimum overlap ratio to count as a match (default: 0.2)
 
     Returns:
-    - dict with counts:
+    - dict: dictionary with counts and statistics:
         {
             "correct": int,  # matched at same time
             "early": int,    # matched one time step before
@@ -639,6 +796,16 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     """
     # Helper to get mask for a storm contour
     def contour_to_mask(contour, shape):
+        """
+        Convert contour coordinates to binary mask.
+        
+        Parameters:
+        - contour: list, list of (x, y) coordinates
+        - shape: tuple, (height, width) of the output mask
+        
+        Returns:
+        - np.ndarray: binary mask of the contour
+        """
         from matplotlib.path import Path as MplPath
         # Ensure shape is a 2-tuple
         if len(shape) == 1:
@@ -651,15 +818,28 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         mask = path.contains_points(coords).reshape(shape)
         return mask
 
-    # Build lookup: time_step -> list of (mask, used_flag)
+    # Build lookup: time_step -> list of (mask, used_flag, area, duration)
     def build_storm_masks(new_storms, data_shape):
+        """
+        Build lookup table for storm masks and metadata.
+        
+        Parameters:
+        - new_storms: list, list of storm dictionaries
+        - data_shape: tuple, (height, width) for mask creation
+        
+        Returns:
+        - dict: lookup table mapping time_step to list of storm masks with metadata
+        """
         lookup = {}
         for entry in new_storms:
             t = entry["time_step"]
             masks = []
-            for contour in entry["new_storm_coordinates"]:
+            for i, contour in enumerate(entry["new_storm_coordinates"]):
                 mask = contour_to_mask(contour, data_shape)
-                masks.append({"mask": mask, "used": False})
+                # Get area and duration from the storm data
+                area = entry.get("storm_areas_km2", [15.0])[i] if i < len(entry.get("storm_areas_km2", [])) else 15.0
+                duration = entry.get("storm_durations_frames", [1.0])[i] if i < len(entry.get("storm_durations_frames", [])) else 1.0
+                masks.append({"mask": mask, "used": False, "area": area, "duration": duration})
             lookup[t] = masks
         return lookup
 
@@ -683,7 +863,27 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                     max_x = max(max_x, int(arr[:, 0].max()))
                     max_y = max(max_y, int(arr[:, 1].max()))
     if not found:
-        return {"correct": 0, "early": 0, "late": 0, "false_positives": sum(e["new_storm_count"] for e in new_storms_pred), "total_true": 0, "total_pred": sum(e["new_storm_count"] for e in new_storms_pred), "correct_over_true": 0.0, "correct_over_pred": 0.0, "anytime_ratio": 0.0, "false_positive_ratio": 0.0}
+        # Return default statistics when no storms are found
+        default_stats = {
+            "correct": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
+            "early": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
+            "late": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
+            "false_positives": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
+            "true_storms": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0}
+        }
+        return {
+            "correct": 0, 
+            "early": 0, 
+            "late": 0, 
+            "false_positives": sum(e["new_storm_count"] for e in new_storms_pred), 
+            "total_true": 0, 
+            "total_pred": sum(e["new_storm_count"] for e in new_storms_pred), 
+            "correct_over_true": 0.0, 
+            "correct_over_pred": 0.0, 
+            "anytime_ratio": 0.0, 
+            "false_positive_ratio": 0.0,
+            "statistics": default_stats
+        }
     data_shape = (max_y + 1, max_x + 1)
 
     # Build mask lookups
@@ -695,11 +895,27 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     late = 0
     matched_pred = set()  # (t, idx)
     matched_true = set()  # (t, idx)
+    
+    # Lists to collect statistics
+    correct_areas = []
+    correct_durations = []
+    early_areas = []
+    early_durations = []
+    late_areas = []
+    late_durations = []
+    false_positive_areas = []
+    false_positive_durations = []
+    true_storm_areas = []
+    true_storm_durations = []
 
     # For each true storm, look for matching pred storm in t-1, t, t+1
     print('Evaluating (true storms)...')
     for t, true_storms in true_lookup.items():
         for i, true_storm in enumerate(true_storms):
+            # Add to true storm statistics 
+            true_storm_areas.append(true_storm["area"])
+            true_storm_durations.append(true_storm["duration"])
+            
             found = False
             for dt, label in zip([0, -1, 1], ["correct", "early", "late"]):
                 tt = t + dt
@@ -714,12 +930,23 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                             continue
                         overlap = intersection / area_true
                         if overlap >= overlap_threshold:
+                            # Collect statistics
+                            pred_area = pred_storm["area"]
+                            pred_duration = pred_storm["duration"]
+                            
                             if label == "correct":
                                 correct += 1
+                                correct_areas.append(pred_area)
+                                correct_durations.append(pred_duration)
                             elif label == "early":
                                 early += 1
+                                early_areas.append(pred_area)
+                                early_durations.append(pred_duration)
                             elif label == "late":
                                 late += 1
+                                late_areas.append(pred_area)
+                                late_durations.append(pred_duration)
+                            
                             matched_pred.add((tt, j))
                             matched_true.add((t, i))
                             found = True
@@ -754,6 +981,9 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                     break
             if not matched:
                 false_positives += 1
+                # Collect false positive statistics
+                false_positive_areas.append(pred_storm["area"])
+                false_positive_durations.append(pred_storm["duration"])
 
     total_true = sum(len(v) for v in true_lookup.values())
     total_pred = sum(len(v) for v in pred_lookup.values())
@@ -763,6 +993,48 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     correct_over_pred = correct / total_pred if total_pred > 0 else 0.0
     anytime_ratio = (correct + early + late) / total_true if total_true > 0 else 0.0
     false_positive_ratio = false_positives / total_pred if total_pred > 0 else 0.0
+
+    # Calculate average statistics
+    def safe_mean(values):
+        """
+        Calculate mean of values, returning None if no valid values.
+        
+        Parameters:
+        - values: list, list of numeric values
+        
+        Returns:
+        - float or None: mean of values, or None if no valid values
+        """
+        vals = [v for v in values if v is not None]
+        return float(np.mean(vals)) if vals else None  # Return None if no values
+    
+    statistics = {
+        "correct": {
+            "avg_area_km2": safe_mean(correct_areas),
+            "avg_duration_frames": safe_mean(correct_durations),
+            "storm_count": len(correct_areas)
+        },
+        "early": {
+            "avg_area_km2": safe_mean(early_areas),
+            "avg_duration_frames": safe_mean(early_durations),
+            "storm_count": len(early_areas)
+        },
+        "late": {
+            "avg_area_km2": safe_mean(late_areas),
+            "avg_duration_frames": safe_mean(late_durations),
+            "storm_count": len(late_areas)
+        },
+        "false_positives": {
+            "avg_area_km2": safe_mean(false_positive_areas),
+            "avg_duration_frames": safe_mean(false_positive_durations),
+            "storm_count": len(false_positive_areas)
+        },
+        "true_storms": {
+            "avg_area_km2": safe_mean(true_storm_areas),
+            "avg_duration_frames": safe_mean(true_storm_durations),
+            "storm_count": len(true_storm_areas)
+        }
+    }
 
     return {
         "correct": int(correct),
@@ -775,6 +1047,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         "correct_over_pred": float(correct_over_pred),
         "anytime_ratio": float(anytime_ratio),
         "false_positive_ratio": float(false_positive_ratio),
+        "statistics": statistics
     }
 
 if __name__ == "__main__":
@@ -790,7 +1063,8 @@ if __name__ == "__main__":
     parser.add_argument('--preds', type=str, required=True, help='Path to predicted storms .npy file (shape: N, C, H, W or N, H, W)')
     parser.add_argument('--targets', type=str, required=True, help='Path to true storms .npy file (shape: N, C, H, W or N, H, W)')
     parser.add_argument('--out', type=str, required=True, help='Output JSON file for evaluation results')
-    parser.add_argument('--overlap_threshold', type=float, default=0.2, help='Overlap threshold for matching storms (default: 0.2)')
+    parser.add_argument('--overlap_threshold', type=float, default=0.2, help='Overlap threshold for matching predicted and true storms (default: 0.2)')
+    parser.add_argument('--storm_tracking_overlap_threshold', type=float, default=0.2, help='Overlap threshold for tracking storms across time steps (default: 0.2)')
     parser.add_argument('--reflectivity_threshold', type=float, default=45, help='Reflectivity threshold for storm detection (default: 45)')
     parser.add_argument('--area_threshold_km2', type=float, default=10.0, help='Area threshold for storm detection in km² (default: 10.0)')
     parser.add_argument('--dilation_iterations', type=int, default=5, help='Dilation iterations for storm detection (default: 5)')
@@ -809,6 +1083,15 @@ if __name__ == "__main__":
 
     # Load shape and dtype from metadata files if they exist
     def load_memmap_with_meta(array_path):
+        """
+        Load numpy array with metadata support.
+        
+        Parameters:
+        - array_path: str, path to the .npy file
+        
+        Returns:
+        - np.ndarray: loaded array
+        """
         meta_path = array_path.replace('.npy', '_meta.npz')
         if os.path.exists(meta_path):
             meta = np.load(meta_path)
@@ -837,11 +1120,20 @@ if __name__ == "__main__":
 
     # Progress bar for storm detection
     def detect_with_progress(data, **kwargs):
+        """
+        Detect storms with progress tracking.
+        
+        Parameters:
+        - data: np.ndarray, radar data
+        - **kwargs: additional keyword arguments passed to detect_new_storm_formations
+        
+        Returns:
+        - result from detect_new_storm_formations
+        """
         storms = []
-        # Extract parameters for detect_storms (exclude displacement-specific args and desc)
+        # Extract parameters for detect_storms (only the parameters it actually accepts)
         storm_kwargs = {k: v for k, v in kwargs.items() 
-                       if k not in ['desc', 'use_displacement_prediction', 'patch_size', 'patch_stride', 
-                                   'patch_thresh', 'patch_frac', 'maxv', 'use_high_reflectivity_patches']}
+                       if k in ['reflectivity_threshold', 'area_threshold_km2', 'dilation_iterations']}
         
         # Step 1: Detect storms in each frame 
         desc = kwargs.get('desc', 'Detecting storms')
@@ -865,6 +1157,8 @@ if __name__ == "__main__":
         reflectivity_threshold=args.reflectivity_threshold,
         area_threshold_km2=args.area_threshold_km2,
         dilation_iterations=args.dilation_iterations,
+        overlap_threshold=args.overlap_threshold,
+        storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
         use_displacement_prediction=use_displacement_prediction,
         patch_size=args.patch_size,
         patch_stride=args.patch_stride,
@@ -880,6 +1174,8 @@ if __name__ == "__main__":
         reflectivity_threshold=args.reflectivity_threshold,
         area_threshold_km2=args.area_threshold_km2,
         dilation_iterations=args.dilation_iterations,
+        overlap_threshold=args.overlap_threshold,
+        storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
         use_displacement_prediction=use_displacement_prediction,
         patch_size=args.patch_size,
         patch_stride=args.patch_stride,
@@ -911,6 +1207,23 @@ if __name__ == "__main__":
     
     print("\n=== STORM INITIATION METRICS ===")
     print(json.dumps(storm_results, indent=2))
+    
+    # Print statistics in a more readable format
+    if "statistics" in storm_results:
+        print("\n=== STORM STATISTICS ===")
+        stats = storm_results["statistics"]
+        for category, metrics in stats.items():
+            print(f"{category.upper()}:")
+            if metrics['storm_count'] > 0:
+                area_str = f"{metrics['avg_area_km2']:.2f} km²" if metrics['avg_area_km2'] is not None else "N/A"
+                duration_str = f"{metrics['avg_duration_frames']:.2f} frames" if metrics['avg_duration_frames'] is not None else "N/A"
+                print(f"  Storm Count: {metrics['storm_count']}")
+                print(f"  Average Area: {area_str}")
+                print(f"  Average Duration: {duration_str}")
+            else:
+                print(f"  Storm Count: 0 (no storms in this category)")
+                print(f"  Average Area: N/A")
+                print(f"  Average Duration: N/A")
     
     print("\n=== FORECASTING METRICS ===")
     print(f"B-MSE: {forecasting_metrics['b_mse']:.4f}")

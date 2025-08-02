@@ -95,6 +95,27 @@ The system now uses the **same patch selection logic as the training scripts**:
 - `maxv`: Maximum value for normalization (default: 85.0)
 - `use_high_reflectivity_patches`: Enable/disable patch selection (default: True)
 
+## Overlap Thresholds
+
+The storm evaluation uses **two different overlap thresholds** for different purposes:
+
+### **1. Evaluation Overlap Threshold (`--overlap_threshold`)**
+- **Purpose**: Determines if a predicted storm matches a true storm during evaluation
+- **Usage**: Used in `evaluate_new_storm_predictions()` to classify storms as correct, early, late, or false positives
+- **Default**: 0.2 (20% overlap required for a match)
+- **Range**: 0.0 to 1.0
+
+### **2. Storm Tracking Overlap Threshold (`--storm_tracking_overlap_threshold`)**
+- **Purpose**: Determines if a storm in frame t+1 is the same as a storm in frame t for duration calculation
+- **Usage**: Used in `calculate_storm_durations()` to track storms across time steps
+- **Default**: 0.3 (30% overlap required to consider storms as the same)
+- **Range**: 0.0 to 1.0
+
+### **Why Two Different Thresholds?**
+- **Evaluation threshold** should be stricter (lower) to ensure accurate matching between predictions and ground truth
+- **Tracking threshold** can be more lenient (higher) to account for storm evolution and movement across frames
+- **Different use cases**: Evaluation is about prediction accuracy, tracking is about storm lifecycle
+
 ### **CLI Usage**
 ```bash
 python src/utils/storm_utils.py \
@@ -105,6 +126,7 @@ python src/utils/storm_utils.py \
   --area_threshold_km2 5.0 \
   --dilation_iterations 5 \
   --overlap_threshold 0.2 \
+  --storm_tracking_overlap_threshold 0.3 \
   --use_displacement_prediction \
   --patch_size 64 \
   --patch_stride 32 \
@@ -145,7 +167,8 @@ python src/utils/storm_utils.py \
 - `--reflectivity_threshold`: dBZ threshold for storm detection (default: 45)
 - `--area_threshold_km2`: Minimum storm area in km² (default: 5.0)
 - `--dilation_iterations`: Dilation iterations for storm region merging (default: 5)
-- `--overlap_threshold`: Overlap ratio for matching storms (default: 0.2)
+- `--overlap_threshold`: Overlap ratio for matching predicted and true storms (default: 0.2)
+- `--storm_tracking_overlap_threshold`: Overlap ratio for tracking storms across time steps (default: 0.2)
 - `--use_displacement_prediction`: Enable displacement-based prediction for new storm detection (default: True)
 - `--no_displacement_prediction`: Disable displacement-based prediction (use overlap-based method)
 
