@@ -92,7 +92,8 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
     ```
    - This will save a JSON file with evaluation metrics for storm initiations and forecasting performance.
    - The displacement-based detection accounts for storm movement caused by wind/advection to reduce false positive new storm detections.
-   - *High-Reflectivity Patch Selection*: By default, displacement vectors are only computed on patches with sufficient high-reflectivity pixels.
+   - Displacement vectors are only computed on patches with sufficient high-reflectivity pixels.
+   - Use `--no_displacement_prediction` for basic overlap tracking without displacement calculation.
 
 6. **Track Experiments**
    - If using Weights & Biases, logs are saved in `experiments/wandb/`.

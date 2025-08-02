@@ -351,9 +351,9 @@ def calculate_contour_overlap(contour1, contour2, data_shape=None):
         print(f"Warning: Error calculating contour overlap: {e}")
         return 0.0
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, use_high_reflectivity_patches=True, max_displacement=100):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, max_displacement=100):
     """
-    Detects new storm formations using displacement-based prediction to account for storm movement.
+    Detects new storm formations using either displacement-based prediction (with patches) or simple overlap tracking.
     
     Parameters:
     - data: np.ndarray of shape (T, H, W) - radar reflectivity data over time
@@ -362,18 +362,17 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     - dilation_iterations: int - number of dilation iterations for storm smoothing (default: 5)
     - overlap_threshold: float - overlap threshold for determining if a storm is new (default: 0.2)
     - storm_tracking_overlap_threshold: float - overlap threshold for tracking storms across time steps (default: 0.2)
-    - use_displacement_prediction: bool - whether to use displacement-based prediction (default: True)
+    - use_displacement_prediction: bool - whether to use displacement-based prediction with patches (default: True)
     - patch_size: int - size of patches for cross-correlation (default: 32)
     - patch_stride: int - stride between patches (default: 16)
     - patch_thresh: float - threshold for patch selection in dBZ (default: 35.0)
     - patch_frac: float - minimum fraction of pixels above threshold (default: 0.015)
     - maxv: float - maximum value for normalization (default: 85.0)
-    - use_high_reflectivity_patches: bool - whether to only use patches with high reflectivity (default: True)
     - max_displacement: int - maximum expected displacement in pixels (default: 100)
     
     Returns:
     - If use_displacement_prediction=True: tuple of (new_storms_summary, displacement_fields, selected_patch_centers)
-    - If use_displacement_prediction=False: new_storms_summary only
+    - If use_displacement_prediction=False: new_storms_summary only (simple overlap tracking)
     """
     storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
     
@@ -392,7 +391,6 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             patch_thresh=patch_thresh,
             patch_frac=patch_frac,
             maxv=maxv,
-            use_high_reflectivity_patches=use_high_reflectivity_patches,
             show_progress=True
         )
         
@@ -515,8 +513,8 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
         
         return new_storms_summary
 
-def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displacement=100, show_progress=True, 
-                                patch_thresh=35.0, patch_frac=0.025, maxv=85.0, use_high_reflectivity_patches=True):
+def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displacement=100, show_progress=True, 
+                                patch_thresh=35.0, patch_frac=0.015, maxv=85.0):
     """
     Compute displacement vectors using patch-based cross-correlation between consecutive frames.
     These vectors represent pixel displacement caused by wind/advection.
@@ -530,7 +528,7 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
     - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
     - patch_frac: float, minimum fraction of pixels above threshold (default: 0.025)
     - maxv: float, maximum value for normalization (default: 85.0)
-    - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
+
     
     Returns:
     - displacement_vectors: np.ndarray of shape (T-1, 2) - (u, v) displacement components for each time step
@@ -610,12 +608,12 @@ def compute_displacement_vectors(data, patch_size=64, patch_stride=32, max_displ
                     continue
                 
                 # High-reflectivity patch selection (same logic as training scripts)
-                if use_high_reflectivity_patches:
-                    patch_normalized = np.maximum(patch1, 0) / (maxv + 1e-6)
-                    total_pix = patch_normalized.size
-                    n_above = (patch_normalized > patch_thresh_normalized).sum()
-                    if n_above / total_pix < patch_frac:
-                        continue
+                # Use high-reflectivity patch selection for displacement computation
+                patch_normalized = np.maximum(patch1, 0) / (maxv + 1e-6)
+                total_pix = patch_normalized.size
+                n_above = (patch_normalized > patch_thresh_normalized).sum()
+                if n_above / total_pix < patch_frac:
+                    continue
                 
                 # Normalize patches for better correlation
                 patch1_norm = (patch1 - np.mean(patch1)) / (np.std(patch1) + 1e-8)
@@ -1076,8 +1074,7 @@ if __name__ == "__main__":
     parser.add_argument('--patch_thresh', type=float, default=35.0, help='Threshold for patch selection in dBZ (default: 35.0)')
     parser.add_argument('--patch_frac', type=float, default=0.015, help='Minimum fraction of pixels above threshold (default: 0.015)')
     parser.add_argument('--maxv', type=float, default=85.0, help='Maximum value for normalization (default: 85.0)')
-    parser.add_argument('--use_high_reflectivity_patches', action='store_true', default=True, help='Use only patches with high reflectivity (default: True)')
-    parser.add_argument('--no_high_reflectivity_patches', action='store_true', help='Disable high-reflectivity patch selection (use all patches)')
+
 
     args = parser.parse_args()
 
@@ -1148,42 +1145,61 @@ if __name__ == "__main__":
     # Determine displacement prediction setting
     use_displacement_prediction = args.use_displacement_prediction and not args.no_displacement_prediction
     
-    # Determine high-reflectivity patch setting
-    use_high_reflectivity_patches = args.use_high_reflectivity_patches and not args.no_high_reflectivity_patches
+
     
     print('Detecting new storm formations in predictions...')
-    pred_result = detect_with_progress(
-        pred_cappi,
-        reflectivity_threshold=args.reflectivity_threshold,
-        area_threshold_km2=args.area_threshold_km2,
-        dilation_iterations=args.dilation_iterations,
-        overlap_threshold=args.overlap_threshold,
-        storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
-        use_displacement_prediction=use_displacement_prediction,
-        patch_size=args.patch_size,
-        patch_stride=args.patch_stride,
-        patch_thresh=args.patch_thresh,
-        patch_frac=args.patch_frac,
-        maxv=args.maxv,
-        use_high_reflectivity_patches=use_high_reflectivity_patches,
-        desc='Pred storms')
+    if use_displacement_prediction:
+        pred_result = detect_with_progress(
+            pred_cappi,
+            reflectivity_threshold=args.reflectivity_threshold,
+            area_threshold_km2=args.area_threshold_km2,
+            dilation_iterations=args.dilation_iterations,
+            overlap_threshold=args.overlap_threshold,
+            storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
+            use_displacement_prediction=True,
+            patch_size=args.patch_size,
+            patch_stride=args.patch_stride,
+            patch_thresh=args.patch_thresh,
+            patch_frac=args.patch_frac,
+            maxv=args.maxv,
+            desc='Pred storms')
+    else:
+        pred_result = detect_with_progress(
+            pred_cappi,
+            reflectivity_threshold=args.reflectivity_threshold,
+            area_threshold_km2=args.area_threshold_km2,
+            dilation_iterations=args.dilation_iterations,
+            overlap_threshold=args.overlap_threshold,
+            storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
+            use_displacement_prediction=False,
+            desc='Pred storms')
     
     print('Detecting new storm formations in targets...')
-    tgt_result = detect_with_progress(
-        tgt_cappi,
-        reflectivity_threshold=args.reflectivity_threshold,
-        area_threshold_km2=args.area_threshold_km2,
-        dilation_iterations=args.dilation_iterations,
-        overlap_threshold=args.overlap_threshold,
-        storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
-        use_displacement_prediction=use_displacement_prediction,
-        patch_size=args.patch_size,
-        patch_stride=args.patch_stride,
-        patch_thresh=args.patch_thresh,
-        patch_frac=args.patch_frac,
-        maxv=args.maxv,
-        use_high_reflectivity_patches=use_high_reflectivity_patches,
-        desc='True storms')
+    if use_displacement_prediction:
+        tgt_result = detect_with_progress(
+            tgt_cappi,
+            reflectivity_threshold=args.reflectivity_threshold,
+            area_threshold_km2=args.area_threshold_km2,
+            dilation_iterations=args.dilation_iterations,
+            overlap_threshold=args.overlap_threshold,
+            storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
+            use_displacement_prediction=True,
+            patch_size=args.patch_size,
+            patch_stride=args.patch_stride,
+            patch_thresh=args.patch_thresh,
+            patch_frac=args.patch_frac,
+            maxv=args.maxv,
+            desc='True storms')
+    else:
+        tgt_result = detect_with_progress(
+            tgt_cappi,
+            reflectivity_threshold=args.reflectivity_threshold,
+            area_threshold_km2=args.area_threshold_km2,
+            dilation_iterations=args.dilation_iterations,
+            overlap_threshold=args.overlap_threshold,
+            storm_tracking_overlap_threshold=args.storm_tracking_overlap_threshold,
+            use_displacement_prediction=False,
+            desc='True storms')
 
     # Handle different return types based on displacement prediction setting
     if use_displacement_prediction and len(pred_cappi) > 1:

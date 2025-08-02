@@ -1,4 +1,4 @@
-# Storm Utils
+<!-- # Storm Utils
 
 This folder contains utility functions for storm detection, animation, and evaluation in radar nowcasting experiments.
 
@@ -58,11 +58,16 @@ The displacement vectors represent **pixel displacement caused by wind/advection
 - **Better Storm Tracking**: More accurate prediction of storm movement
 - **Reduced False Positives**: Only storms that don't match predicted positions are classified as "new"
 - **Similar to Paper**: Implementation follows the approach in the referenced MDPI paper
-- **Configurable**: Can be disabled with `use_displacement_prediction=False` for comparison
+- **Two Modes**: 
+  - **Displacement-based (with patches)**: Uses displacement prediction for accurate storm tracking (always includes high-reflectivity patch selection)
+  - **Simple overlap**: Basic overlap tracking without displacement calculation (faster but less accurate)
 
 ### **Parameters**
 - `patch_size`: Size of patches for cross-correlation (default: 64)
 - `patch_stride`: Stride between patches (default: 32)
+- `use_displacement_prediction`: Enable displacement-based prediction with patches (default: True)
+  - If `True`: Uses displacement prediction for accurate storm tracking (always includes high-reflectivity patch selection)
+  - If `False`: Uses simple overlap tracking (no displacement calculation)
 
 ## High-Reflectivity Patch Selection
 
@@ -87,13 +92,12 @@ The system now uses the **same patch selection logic as the training scripts**:
 - **Physical Relevance**: Focus on storm regions where displacement matters
 - **Cleaner Visualization**: Arrows only appear on meaningful storm regions
 - **Consistency**: Same logic as training patch extraction
-- **Configurable**: Can be disabled for comparison or adjusted for different datasets
+- **Always Enabled**: High-reflectivity patch selection is always used for displacement computation
 
 ### **Parameters**
 - `patch_thresh`: Threshold for patch selection (default: 0.35, normalized)
 - `patch_frac`: Minimum fraction of pixels above threshold (default: 0.025)
 - `maxv`: Maximum value for normalization (default: 85.0)
-- `use_high_reflectivity_patches`: Enable/disable patch selection (default: True)
 
 ## Overlap Thresholds
 
@@ -211,7 +215,7 @@ python src/utils/storm_section_counter.py \
 ### In `storm_utils.py` (detection & evaluation)
 - `detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)`
   - Detects storms in each frame of radar data using physical area calculations for polar coordinates.
-- `detect_new_storm_formations(data, reflectivity_threshold, area_threshold_km2, dilation_iterations, overlap_threshold, use_displacement_prediction=True, patch_size=64, patch_stride=32, patch_thresh=0.35, patch_frac=0.025, maxv=85.0, use_high_reflectivity_patches=True)`
+- `detect_new_storm_formations(data, reflectivity_threshold, area_threshold_km2, dilation_iterations, overlap_threshold, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, max_displacement=100)`
   - Identifies new storm initiations over time using displacement-based prediction to account for storm movement.
   - Includes high-reflectivity patch selection for displacement computation.
 - `compute_displacement_vectors(data, patch_size, patch_stride, max_displacement, show_progress=True, patch_thresh=0.35, patch_frac=0.025, maxv=85.0, use_high_reflectivity_patches=True)`
@@ -280,4 +284,4 @@ print("HSS by threshold:", forecasting_metrics['hss_by_threshold'])
 ani = storm_animation_utils.animate_storms(preds)
 from IPython.display import HTML
 display(HTML(ani.to_jshtml()))
-```
+``` -->

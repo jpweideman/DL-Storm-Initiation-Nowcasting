@@ -202,8 +202,7 @@ def animate_storms_polar_comparison(true_data, pred_data, storm_threshold=45, ar
 def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
                       dilation_iterations=5, overlap_threshold=0.2, interval=200,
                       use_displacement_prediction=True, patch_size=32, patch_stride=16, 
-                      patch_thresh=35.0, patch_frac=0.015, maxv=85.0, 
-                      use_high_reflectivity_patches=True):
+                      patch_thresh=35.0, patch_frac=0.015, maxv=85.0):
     """
     Animate the progression of newly formed storms over time using radar reflectivity data.
     
@@ -214,25 +213,29 @@ def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0,
     - dilation_iterations: int, dilation iterations for storm smoothing (default: 5)
     - overlap_threshold: float, overlap threshold for new storm detection (default: 0.2)
     - interval: int, animation interval in milliseconds (default: 200)
-    - use_displacement_prediction: bool, whether to use displacement-based prediction (default: True)
+    - use_displacement_prediction: bool, whether to use displacement-based prediction with patches (default: True)
     - patch_size: int, size of patches for cross-correlation (default: 32)
     - patch_stride: int, stride between patches (default: 16)
     - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
     - patch_frac: float, minimum fraction of pixels above threshold (default: 0.015)
     - maxv: float, maximum value for normalization (default: 85.0)
-    - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
     
     Returns:
     - ani: matplotlib.animation.FuncAnimation object
     """
     # Get new storm formations
-    new_storms_result = detect_new_storm_formations(
-        data, reflectivity_threshold, area_threshold_km2, 
-        dilation_iterations, overlap_threshold, use_displacement_prediction=use_displacement_prediction,
-        patch_size=patch_size, patch_stride=patch_stride,
-        patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv,
-        use_high_reflectivity_patches=use_high_reflectivity_patches
-    )
+    if use_displacement_prediction:
+        new_storms_result = detect_new_storm_formations(
+            data, reflectivity_threshold, area_threshold_km2, 
+            dilation_iterations, overlap_threshold, use_displacement_prediction=True,
+            patch_size=patch_size, patch_stride=patch_stride,
+            patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv
+        )
+    else:
+        new_storms_result = detect_new_storm_formations(
+            data, reflectivity_threshold, area_threshold_km2, 
+            dilation_iterations, overlap_threshold, use_displacement_prediction=False
+        )
     
     # Handle different return types from detect_new_storm_formations
     if isinstance(new_storms_result, tuple):
@@ -268,7 +271,7 @@ def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0,
 def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
                                 dilation_iterations=5, overlap_threshold=0.1, interval=200,
                                 patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, 
-                                maxv=85.0, use_high_reflectivity_patches=True):
+                                maxv=85.0):
     """
     Animate new storm detection with displacement-based prediction visualization.
     
@@ -284,7 +287,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
     - patch_frac: float, minimum fraction of pixels above threshold (default: 0.015)
     - maxv: float, maximum value for normalization (default: 85.0)
-    - use_high_reflectivity_patches: bool, whether to only use patches with high reflectivity (default: True)
+
     
     Returns:
     - ani: matplotlib.animation.FuncAnimation object
@@ -308,31 +311,11 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
         data, reflectivity_threshold, area_threshold_km2, 
         dilation_iterations, overlap_threshold, use_displacement_prediction=True,
         patch_size=patch_size, patch_stride=patch_stride,
-        patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv,
-        use_high_reflectivity_patches=use_high_reflectivity_patches
+        patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv
     )
     
-    # Check if displacement fields and patch centers were returned
-    if isinstance(result, tuple) and len(result) == 3:
-        new_storms_result, displacement_fields, selected_patch_centers = result
-    elif isinstance(result, tuple) and len(result) == 2:
-        new_storms_result, displacement_fields = result
-        # If no patch centers returned, compute them for visualization
-        _, _, selected_patch_centers = compute_displacement_vectors(
-            data, patch_size=patch_size, patch_stride=patch_stride,
-            patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv,
-            use_high_reflectivity_patches=use_high_reflectivity_patches,
-            show_progress=False
-        )
-    else:
-        new_storms_result = result
-        # If no displacement fields returned, compute them for visualization
-        _, displacement_fields, selected_patch_centers = compute_displacement_vectors(
-            data, patch_size=patch_size, patch_stride=patch_stride,
-            patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv,
-            use_high_reflectivity_patches=use_high_reflectivity_patches,
-            show_progress=False
-        )
+    # detect_new_storm_formations always returns displacement data when use_displacement_prediction=True
+    new_storms_result, displacement_fields, selected_patch_centers = result
     
     storm_lines = []
     predicted_lines = []
@@ -406,12 +389,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                 y_end = min(y_start + patch_size, data.shape[1])
                 x_end = min(x_start + patch_size, data.shape[2])
                 patch_mask[y_start:y_end, x_start:x_end] = True
-            
-
-            
-
-            
-
+  
             # Plot displacement vectors as arrows on a global grid
             # Real arrows in patch regions, dummy arrows elsewhere
             step = 15  # Arrow grid density
