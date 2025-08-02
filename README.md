@@ -88,7 +88,6 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --patch_thresh 35 \
        --patch_frac 0.015 \
        --maxv 85.0 \
-       --use_high_reflectivity_patches
     ```
    - This will save a JSON file with evaluation metrics for storm initiations and forecasting performance.
    - The displacement-based detection accounts for storm movement caused by wind/advection to reduce false positive new storm detections.
