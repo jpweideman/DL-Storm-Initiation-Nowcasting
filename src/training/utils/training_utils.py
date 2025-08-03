@@ -6,6 +6,11 @@ import torch
 def set_seed(seed=42):
     """
     Set random seed for reproducibility across random, numpy, and torch.
+
+    Parameters
+    ----------
+    seed : int, optional
+        Random seed value (default: 42).
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -18,6 +23,13 @@ def set_seed(seed=42):
 def atomic_save(obj, path):
     """
     Atomically save a PyTorch object to disk to avoid partial writes.
+
+    Parameters
+    ----------
+    obj : torch.Tensor or dict
+        Object to save.
+    path : str or pathlib.Path
+        Path where to save the object.
     """
     tmp_path = str(path) + ".tmp"
     torch.save(obj, tmp_path)
@@ -26,6 +38,22 @@ def atomic_save(obj, path):
 def mse_loss(pred, target, maxv=85.0, eps=1e-6):
     """
     Compute MSE in dBZ units.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted values in normalized scale (0-1).
+    target : torch.Tensor
+        Target values in normalized scale (0-1).
+    maxv : float, optional
+        Maximum value for denormalization in dBZ (default: 85.0).
+    eps : float, optional
+        Small epsilon to avoid division by zero (default: 1e-6).
+
+    Returns
+    -------
+    torch.Tensor
+        Mean squared error in dBZ units.
     """
     pred_dBZ = pred * (maxv + eps)
     target_dBZ = target * (maxv + eps)
@@ -34,9 +62,26 @@ def mse_loss(pred, target, maxv=85.0, eps=1e-6):
 def weighted_mse_loss(pred, target, threshold=30.0, weight_high=10.0, maxv=85.0, eps=1e-6):
     """
     Weighted MSE loss in dBZ units, emphasizing high-reflectivity areas.
-    pred, target: normalized (0-1), so convert to dBZ first.
-    threshold: dBZ value above which to apply weight_high (e.g., 30.0)
-    weight_high: weight for pixels above threshold
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted values in normalized scale (0-1).
+    target : torch.Tensor
+        Target values in normalized scale (0-1).
+    threshold : float, optional
+        dBZ value above which to apply weight_high (default: 30.0).
+    weight_high : float, optional
+        Weight for pixels above threshold (default: 10.0).
+    maxv : float, optional
+        Maximum value for denormalization in dBZ (default: 85.0).
+    eps : float, optional
+        Small epsilon to avoid division by zero (default: 1e-6).
+
+    Returns
+    -------
+    torch.Tensor
+        Weighted mean squared error in dBZ units.
     """
     pred_dBZ = pred * (maxv + eps)
     target_dBZ = target * (maxv + eps)
@@ -46,13 +91,31 @@ def weighted_mse_loss(pred, target, threshold=30.0, weight_high=10.0, maxv=85.0,
 
 def b_mse_loss(pred, target, maxv=85.0, eps=1e-6):
     """
-    Compute the B-MSE (Balanced Mean Squared Error), using the weighting scheme:
-    w(x) = 1 if x < 2
-           2 if 2 <= x < 5
-           5 if 5 <= x < 10
-           10 if 10 <= x < 30
-           30 if 30 <= x < 45
-           45 if x >= 45
+    Compute the B-MSE (Balanced Mean Squared Error).
+
+    Uses the weighting scheme:
+    - w(x) = 1 if x < 2
+    - w(x) = 2 if 2 <= x < 5
+    - w(x) = 5 if 5 <= x < 10
+    - w(x) = 10 if 10 <= x < 30
+    - w(x) = 30 if 30 <= x < 45
+    - w(x) = 45 if x >= 45
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted values in normalized scale (0-1).
+    target : torch.Tensor
+        Target values in normalized scale (0-1).
+    maxv : float, optional
+        Maximum value for denormalization in dBZ (default: 85.0).
+    eps : float, optional
+        Small epsilon to avoid division by zero (default: 1e-6).
+
+    Returns
+    -------
+    torch.Tensor
+        Balanced mean squared error in dBZ units.
     """
     pred_dBZ = pred * (maxv + eps)
     target_dBZ = target * (maxv + eps)
