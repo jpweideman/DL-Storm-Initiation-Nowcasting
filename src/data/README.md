@@ -1,6 +1,6 @@
 # Data Processing Scripts
 
-This directory contains scripts for processing raw radar data from `.h5` files into training-ready formats.
+This folder contains scripts for processing raw radar data from `.h5` files into training-ready formats.
 
 ## Overview
 
