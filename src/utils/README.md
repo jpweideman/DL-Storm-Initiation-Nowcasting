@@ -34,7 +34,7 @@ python src/utils/storm_utils.py \
 
 **Output includes:**
 - Storm initiation metrics: correct (predicted at correct time step), early (predicted 1 time step early), late (predicted 1 time step late), false positives, etc.
-- Forecasting metrics: B-MSE, CSI, HSS for thresholds [2, 5, 10, 30, 45] dBZ
+- Forecasting metrics: Balanced Mean Squared Error (B-MSE), Critical Success Index (CSI), Heidke Skill Score (HSS) for thresholds [2, 5, 10, 30, 45] dBZ
 
 ### Count Storms by Data Sections
 
@@ -58,7 +58,7 @@ See the `notebooks/` folder for examples of how to use the animation functions.
 
 ## Storm Detection and Initiation Features
 
-- **Physical Area Calculations**: Storm detection accounts for polar coordinate geometry to calculate the area of storms in km². In radar polar coordinates, the same number of pixels represents different physical areas depending on distance from the radar. A storm near the radar center covers a smaller physical area than the same storm at the edge of coverage. Physical area calculations thus ensures consistent storm detection across the entire radar domain.
+- **Physical Area Calculations**: Storm detection accounts for polar coordinate geometry to calculate the area of storms in km². In radar polar coordinates, storms with the same number of pixels represent different physical areas depending on their distance from the radar. A storm near the radar center covers a smaller physical area than a storm with the same pixel count at the edge measurements. Physical area calculations thus ensures consistent storm detection across the entire radar domain.
 
 - **Displacement-Based Tracking**: Uses patch-based cross-correlation to track storm movement caused by wind. Strong winds can move storms significantly between time steps, making them appear as "new" storms when using simple overlap tracking. Displacement-based tracking predicts where storms should be based on wind movement, reducing false positive new storm detections.
 
