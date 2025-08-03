@@ -33,7 +33,7 @@ python src/utils/storm_utils.py \
 ```
 
 **Output includes:**
-- Storm initiation metrics: correct, early, late, false positives, etc.
+- Storm initiation metrics: correct (predicted at correct time step), early (predicted 1 time step early), late (predicted 1 time step late), false positives, etc.
 - Forecasting metrics: B-MSE, CSI, HSS for thresholds [2, 5, 10, 30, 45] dBZ
 
 ### Count Storms by Data Sections
