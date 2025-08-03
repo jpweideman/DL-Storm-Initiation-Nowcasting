@@ -11,6 +11,7 @@ This folder contains scripts for training and evaluating different deep learning
 - **train_3D_cnn.py** — Train a 3D CNN model.
 - **train_unet_3D_cnn.py** — Train a U-Net 3D CNN model.
 - **train_unet_conv_lstm.py** — Train a U-Net ConvLSTM model.
+- **train_unet_trajGRU.py** — Train a U-Net TrajGRU model.
 
 ## Example: Train a UNet 3D CNN Model
 

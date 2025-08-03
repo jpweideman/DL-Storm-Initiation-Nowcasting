@@ -11,6 +11,7 @@ This folder contains modular definitions of all deep learning models used for ra
 - **cnn_3d.py** — 3D Convolutional Neural Network.
 - **unet_3d_cnn.py** — U-Net style 3D CNN.
 - **unet_conv_lstm.py** — U-Net with ConvLSTM blocks.
+- **unet_traj_gru.py** — U-Net with TrajGRU blocks.
 
 ## Usage
 - Import models in training scripts, e.g.:
