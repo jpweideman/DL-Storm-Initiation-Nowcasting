@@ -14,26 +14,31 @@
       "correct": {
         "avg_area_km2": 30.287072508983034,
         "avg_duration_frames": 9.571428571428571,
+        "avg_pixels": 189.42857142857142,
         "storm_count": 7
       },
       "early": {
         "avg_area_km2": 14.393512175040737,
         "avg_duration_frames": 10.0,
+        "avg_pixels": 143.0,
         "storm_count": 2
       },
       "late": {
         "avg_area_km2": 73.27328532185194,
         "avg_duration_frames": 16.0,
+        "avg_pixels": 151.0,
         "storm_count": 1
       },
       "false_positives": {
         "avg_area_km2": 45.212130941037394,
         "avg_duration_frames": 12.214285714285714,
+        "avg_pixels": 155.92857142857142,
         "storm_count": 14
       },
       "true_storms": {
         "avg_area_km2": 58.597477622730416,
         "avg_duration_frames": 14.052631578947368,
+        "avg_pixels": 216.94736842105263,
         "storm_count": 19
       }
     }

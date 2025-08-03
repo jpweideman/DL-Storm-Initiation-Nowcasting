@@ -790,6 +790,11 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
             "correct_over_pred": float,
             "anytime_ratio": float,
             "false_positive_ratio": float,
+            "statistics": dict,  # detailed statistics for each category including:
+                # - avg_area_km2: average storm area in km²
+                # - avg_duration_frames: average storm duration in frames
+                # - avg_pixels: average storm size in pixels
+                # - storm_count: number of storms in category
         }
     """
     # Helper to get mask for a storm contour
@@ -863,11 +868,11 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     if not found:
         # Return default statistics when no storms are found
         default_stats = {
-            "correct": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
-            "early": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
-            "late": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
-            "false_positives": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0},
-            "true_storms": {"avg_area_km2": None, "avg_duration_frames": None, "storm_count": 0}
+            "correct": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
+            "early": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
+            "late": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
+            "false_positives": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
+            "true_storms": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0}
         }
         return {
             "correct": 0, 
@@ -897,22 +902,27 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     # Lists to collect statistics
     correct_areas = []
     correct_durations = []
+    correct_pixels = []
     early_areas = []
     early_durations = []
+    early_pixels = []
     late_areas = []
     late_durations = []
+    late_pixels = []
     false_positive_areas = []
     false_positive_durations = []
+    false_positive_pixels = []
     true_storm_areas = []
     true_storm_durations = []
+    true_storm_pixels = []
 
     # For each true storm, look for matching pred storm in t-1, t, t+1
-    print('Evaluating (true storms)...')
     for t, true_storms in true_lookup.items():
         for i, true_storm in enumerate(true_storms):
             # Add to true storm statistics 
             true_storm_areas.append(true_storm["area"])
             true_storm_durations.append(true_storm["duration"])
+            true_storm_pixels.append(np.sum(true_storm["mask"]))
             
             found = False
             for dt, label in zip([0, -1, 1], ["correct", "early", "late"]):
@@ -936,14 +946,17 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                                 correct += 1
                                 correct_areas.append(pred_area)
                                 correct_durations.append(pred_duration)
+                                correct_pixels.append(np.sum(pred_storm["mask"]))
                             elif label == "early":
                                 early += 1
                                 early_areas.append(pred_area)
                                 early_durations.append(pred_duration)
+                                early_pixels.append(np.sum(pred_storm["mask"]))
                             elif label == "late":
                                 late += 1
                                 late_areas.append(pred_area)
                                 late_durations.append(pred_duration)
+                                late_pixels.append(np.sum(pred_storm["mask"]))
                             
                             matched_pred.add((tt, j))
                             matched_true.add((t, i))
@@ -953,7 +966,6 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                     break
 
     # False positives: predicted storms not matched to any true storm in ±1 time step
-    print('Evaluating (false positives)...')
     false_positives = 0
     for t, pred_storms in pred_lookup.items():
         for j, pred_storm in enumerate(pred_storms):
@@ -982,6 +994,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                 # Collect false positive statistics
                 false_positive_areas.append(pred_storm["area"])
                 false_positive_durations.append(pred_storm["duration"])
+                false_positive_pixels.append(np.sum(pred_storm["mask"]))
 
     total_true = sum(len(v) for v in true_lookup.values())
     total_pred = sum(len(v) for v in pred_lookup.values())
@@ -1010,26 +1023,31 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         "correct": {
             "avg_area_km2": safe_mean(correct_areas),
             "avg_duration_frames": safe_mean(correct_durations),
+            "avg_pixels": safe_mean(correct_pixels),
             "storm_count": len(correct_areas)
         },
         "early": {
             "avg_area_km2": safe_mean(early_areas),
             "avg_duration_frames": safe_mean(early_durations),
+            "avg_pixels": safe_mean(early_pixels),
             "storm_count": len(early_areas)
         },
         "late": {
             "avg_area_km2": safe_mean(late_areas),
             "avg_duration_frames": safe_mean(late_durations),
+            "avg_pixels": safe_mean(late_pixels),
             "storm_count": len(late_areas)
         },
         "false_positives": {
             "avg_area_km2": safe_mean(false_positive_areas),
             "avg_duration_frames": safe_mean(false_positive_durations),
+            "avg_pixels": safe_mean(false_positive_pixels),
             "storm_count": len(false_positive_areas)
         },
         "true_storms": {
             "avg_area_km2": safe_mean(true_storm_areas),
             "avg_duration_frames": safe_mean(true_storm_durations),
+            "avg_pixels": safe_mean(true_storm_pixels),
             "storm_count": len(true_storm_areas)
         }
     }
@@ -1132,14 +1150,13 @@ if __name__ == "__main__":
         storm_kwargs = {k: v for k, v in kwargs.items() 
                        if k in ['reflectivity_threshold', 'area_threshold_km2', 'dilation_iterations']}
         
-        # Step 1: Detect storms in each frame 
+        #  Detect storms in each frame 
         desc = kwargs.get('desc', 'Detecting storms')
-        print(f"Step 1: {desc} - Detecting storms in each frame...")
         for t in tqdm(range(data.shape[0]), desc=f"{desc} - Frame detection"):
             storms.append(detect_storms(data[t:t+1], **storm_kwargs)[0])
         
-        # Step 2: Detect new storm formations 
-        print(f"Step 2: {desc} - Computing new storm formations with displacement tracking...")
+        #  Detect new storm formations 
+        print(f" {desc} - Computing new storm formations with displacement tracking")
         return detect_new_storm_formations(data, **{k: v for k, v in kwargs.items() if k != 'desc'})
 
     # Determine displacement prediction setting
@@ -1147,7 +1164,6 @@ if __name__ == "__main__":
     
 
     
-    print('Detecting new storm formations in predictions...')
     if use_displacement_prediction:
         pred_result = detect_with_progress(
             pred_cappi,
@@ -1174,7 +1190,6 @@ if __name__ == "__main__":
             use_displacement_prediction=False,
             desc='Pred storms')
     
-    print('Detecting new storm formations in targets...')
     if use_displacement_prediction:
         tgt_result = detect_with_progress(
             tgt_cappi,
@@ -1233,13 +1248,16 @@ if __name__ == "__main__":
             if metrics['storm_count'] > 0:
                 area_str = f"{metrics['avg_area_km2']:.2f} km²" if metrics['avg_area_km2'] is not None else "N/A"
                 duration_str = f"{metrics['avg_duration_frames']:.2f} frames" if metrics['avg_duration_frames'] is not None else "N/A"
+                pixels_str = f"{metrics['avg_pixels']:.1f} pixels" if metrics['avg_pixels'] is not None else "N/A"
                 print(f"  Storm Count: {metrics['storm_count']}")
                 print(f"  Average Area: {area_str}")
                 print(f"  Average Duration: {duration_str}")
+                print(f"  Average Pixels: {pixels_str}")
             else:
                 print(f"  Storm Count: 0 (no storms in this category)")
                 print(f"  Average Area: N/A")
                 print(f"  Average Duration: N/A")
+                print(f"  Average Pixels: N/A")
     
     print("\n=== FORECASTING METRICS ===")
     print(f"B-MSE: {forecasting_metrics['b_mse']:.4f}")
