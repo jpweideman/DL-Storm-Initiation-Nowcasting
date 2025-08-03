@@ -1212,7 +1212,7 @@ if __name__ == "__main__":
     tgt = load_memmap_with_meta(args.targets)
 
     # Always reduce to (T, H, W) by taking max over channel dimension if present
-    # Documented: This is CAPPI (Constant Altitude Plan Position Indicator)
+    # This is refered to as CAPPI (Constant Altitude Plan Position Indicator)
     # If input is (N, C, H, W), take max over axis=1
     # If input is already (N, H, W), do nothing
     if pred.ndim == 4:
