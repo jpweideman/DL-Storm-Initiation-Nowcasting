@@ -12,11 +12,89 @@ from tqdm import tqdm
 
 from src.models.conv_lstm_nonnormalized import ConvLSTM
 # Import shared utilities
-from src.training.utils import set_seed, atomic_save, weighted_mse_loss
+from src.training.utils import set_seed, atomic_save
 # Import dataloaders
 from src.training.utils import NonNormalizedRadarWindowDataset as RadarWindowDataset
 
 set_seed(123)
+
+# Non-normalized loss functions for ConvLSTM non-normalized model
+def mse_loss_nonnormalized(pred, target):
+    """
+    Compute MSE in dBZ units for non-normalized data.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted values in dBZ scale.
+    target : torch.Tensor
+        Target values in dBZ scale.
+
+    Returns
+    -------
+    torch.Tensor
+        Mean squared error in dBZ units.
+    """
+    return ((pred - target) ** 2).mean()
+
+def weighted_mse_loss_nonnormalized(pred, target, threshold=30.0, weight_high=10.0):
+    """
+    Weighted MSE loss in dBZ units for non-normalized data, emphasizing high-reflectivity areas.
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted values in dBZ scale.
+    target : torch.Tensor
+        Target values in dBZ scale.
+    threshold : float, optional
+        dBZ value above which to apply weight_high (default: 30.0).
+    weight_high : float, optional
+        Weight for pixels above threshold (default: 10.0).
+
+    Returns
+    -------
+    torch.Tensor
+        Weighted mean squared error in dBZ units.
+    """
+    weight = torch.ones_like(target)
+    weight[target > threshold] = weight_high
+    return ((pred - target) ** 2 * weight).mean()
+
+def b_mse_loss_nonnormalized(pred, target):
+    """
+    Compute the B-MSE (Balanced Mean Squared Error) for non-normalized data.
+
+    Uses the weighting scheme:
+    - w(x) = 1 if x < 2
+    - w(x) = 2 if 2 <= x < 5
+    - w(x) = 5 if 5 <= x < 10
+    - w(x) = 10 if 10 <= x < 30
+    - w(x) = 30 if 30 <= x < 45
+    - w(x) = 45 if x >= 45
+
+    Parameters
+    ----------
+    pred : torch.Tensor
+        Predicted values in dBZ scale.
+    target : torch.Tensor
+        Target values in dBZ scale.
+
+    Returns
+    -------
+    torch.Tensor
+        Balanced mean squared error in dBZ units.
+    """
+    w = torch.ones_like(target)
+    w = torch.where(target < 2, torch.tensor(1.0, device=target.device), w)
+    w = torch.where((target >= 2) & (target < 5), torch.tensor(2.0, device=target.device), w)
+    w = torch.where((target >= 5) & (target < 10), torch.tensor(5.0, device=target.device), w)
+    w = torch.where((target >= 10) & (target < 30), torch.tensor(10.0, device=target.device), w)
+    w = torch.where((target >= 30) & (target < 45), torch.tensor(30.0, device=target.device), w)
+    w = torch.where(target >= 45, torch.tensor(45.0, device=target.device), w)
+    # Return average weighted squared error per sample 
+    b_mse = (w * (pred - target) ** 2).mean()
+    return b_mse
 
 # Training function
 def train_radar_model(
@@ -34,7 +112,7 @@ def train_radar_model(
     epochs: int = 15,
     device: str = "cuda" ,
     loss_name: str = "mse",
-    loss_weight_thresh: float = 40.0,
+    loss_weight_thresh: float = 30.0,
     loss_weight_high: float = 10.0,
     wandb_project: str = "radar-forecasting",
     early_stopping_patience: int = 10,
@@ -69,11 +147,11 @@ def train_radar_model(
     device : str, optional
         Device to run training on ('cuda' or 'cpu'); defaults to 'cuda' if available.
     loss_name : str, optional
-        Loss function to use; either 'mse' or 'weighted_mse' (default: 'mse').
-    loss_weight_thresh : float, optional (used for weighted_mse)
-        Reflectivity threshold in dBZ (e.g., 40.0).
-    loss_weight_high : float, optional (used for weighted_mse)
-        Weight multiplier for pixels where true > threshold.
+        Loss function to use; either 'mse', 'weighted_mse', or 'b_mse' (default: 'mse').
+    loss_weight_thresh : float, optional
+        Reflectivity threshold in dBZ for weighted_mse loss (e.g., 30.0). Only used when loss_name='weighted_mse'.
+    loss_weight_high : float, optional
+        Weight multiplier for pixels above threshold in weighted_mse loss (e.g., 10.0). Only used when loss_name='weighted_mse'.
     wandb_project : str, optional
         Weights & Biases project name for experiment tracking.
     early_stopping_patience : int, optional
@@ -114,13 +192,15 @@ def train_radar_model(
     model     = ConvLSTM(in_ch=C, hidden_dims=hidden_dims, kernel=kernel_size).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     if loss_name == "mse":
-        criterion = nn.MSELoss()
+        criterion = mse_loss_nonnormalized
     elif loss_name == "weighted_mse":
-        criterion = lambda pred, tgt: weighted_mse_loss(
+        criterion = lambda pred, tgt: weighted_mse_loss_nonnormalized(
             pred, tgt,
             threshold=loss_weight_thresh,
             weight_high=loss_weight_high
         )
+    elif loss_name == "b_mse":
+        criterion = b_mse_loss_nonnormalized
     else:
         raise ValueError(f"Unknown loss function: {loss_name}")
 
@@ -371,15 +451,15 @@ if __name__ == "__main__":
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
-    train_parser.add_argument("--batch_size", type=int, default=1, help="Batch size (default: 4)")
+    train_parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
     train_parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 2e-4)")
     train_parser.add_argument("--epochs", type=int, default=15, help="Number of epochs (default: 15)")
     train_parser.add_argument("--device", type=str, default='cuda', help="Device to train on ('cuda' or 'cpu')")
-    train_parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse or weighted_mse")
-    train_parser.add_argument("--loss_weight_thresh", type=float, default=40.0,
-                    help="Threshold in dBZ to apply higher loss weighting (default: 40.0)")
+    train_parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse, weighted_mse, or b_mse")
+    train_parser.add_argument("--loss_weight_thresh", type=float, default=30.0,
+                                          help="Threshold in dBZ to apply higher loss weighting for weighted_mse loss (default: 30.0). Only used when --loss_name=weighted_mse")
     train_parser.add_argument("--loss_weight_high", type=float, default=10.0,
-                        help="Weight multiplier for pixels above threshold (default: 10.0)")
+                        help="Weight multiplier for pixels above threshold in weighted_mse loss (default: 10.0). Only used when --loss_name=weighted_mse")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
     train_parser.add_argument("--no_wandb", action="store_true", help="Disable wandb logging")
     train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")

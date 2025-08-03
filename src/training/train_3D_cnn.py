@@ -15,7 +15,7 @@ import ast
 
 from src.models.cnn_3d import Radar3DCNN
 # Import utilities
-from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss
+from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss, b_mse_loss
 # Import dataloaders
 from src.training.utils import RadarWindowDataset, PatchRadarWindowDataset
 
@@ -37,10 +37,10 @@ def train_radar_model(
     epochs: int = 15,
     device: str = "cuda" ,
     loss_name: str = "mse",
-    loss_weight_thresh: float = 0.40,
+    loss_weight_thresh: float = 30.0,
     loss_weight_high: float = 10.0,
     patch_size: int = 64,
-    patch_stride: int = 64,
+    patch_stride: int = 32,
     patch_thresh: float = 35.0,
     patch_frac: float = 0.01,
     use_patches: bool = False,
@@ -77,15 +77,15 @@ def train_radar_model(
     device : str, optional
         Device to run training on ('cuda' or 'cpu'); defaults to 'cuda' if available.
     loss_name : str, optional
-        Loss function to use; either 'mse', 'weighted_mse'.
+        Loss function to use; either 'mse', 'weighted_mse', or 'b_mse'.
     loss_weight_thresh : float, optional
-        Threshold for weighted MSE (default: 0.40).
+        Reflectivity threshold in dBZ for weighted_mse loss (e.g., 30.0). Only used when loss_name='weighted_mse'.
     loss_weight_high : float, optional
-        Weight for high-reflectivity pixels (default: 10.0).
+        Weight multiplier for pixels above threshold in weighted_mse loss (e.g., 10.0). Only used when loss_name='weighted_mse'.
     patch_size : int, optional
         Size of spatial patches to extract (default: 64).
     patch_stride : int, optional
-        Stride for patch extraction (default: 64).
+        Stride for patch extraction (default: 32).
     patch_thresh : float, optional
         Threshold for extracting patches (default: 35.0 dBZ).
     patch_frac : float, optional
@@ -157,6 +157,8 @@ def train_radar_model(
             maxv=maxv,
             eps=eps
         )
+    elif loss_name == "b_mse":
+        criterion = lambda pred, tgt: b_mse_loss(pred, tgt, maxv=maxv, eps=eps)
     else:
         raise ValueError(f"Unknown loss function: {loss_name}")
 
@@ -426,16 +428,16 @@ if __name__ == "__main__":
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     train_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
-    train_parser.add_argument("--batch_size", type=int, default=1, help="Batch size (default: 4)")
+    train_parser.add_argument("--batch_size", type=int, default=4, help="Batch size (default: 4)")
     train_parser.add_argument("--lr", type=float, default=2e-4, help="Learning rate (default: 2e-4)")
     train_parser.add_argument("--epochs", type=int, default=15, help="Number of epochs (default: 15)")
     train_parser.add_argument("--device", type=str, default='cuda', help="Device to train on ('cuda' or 'cpu')")
-    train_parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse or weighted_mse (all in dBZ units)")
-    train_parser.add_argument("--loss_weight_thresh", type=float, default=30.0, help="Threshold in dBZ to apply higher loss weighting (default: 30.0 dBZ)")
-    train_parser.add_argument("--loss_weight_high", type=float, default=10.0, help="Weight multiplier for pixels above threshold (default: 10.0)")
+    train_parser.add_argument("--loss_name", type=str, default="mse", help="Loss function: mse, weighted_mse, or b_mse")
+    train_parser.add_argument("--loss_weight_thresh", type=float, default=30.0, help="Threshold in dBZ to apply higher loss weighting for weighted_mse loss (default: 30.0 dBZ). Only used when --loss_name=weighted_mse")
+    train_parser.add_argument("--loss_weight_high", type=float, default=10.0, help="Weight multiplier for pixels above threshold in weighted_mse loss (default: 10.0). Only used when --loss_name=weighted_mse")
     train_parser.add_argument("--patch_size", type=int, default=64, help="Size of spatial patches to extract (default: 64)")
     train_parser.add_argument("--patch_stride", type=int, default=32, help="Stride for patch extraction (default: 32)")
-    train_parser.add_argument("--patch_thresh", type=float, default=35, help="Threshold in dBZ for extracting patches (default: 35 dBZ)")
+    train_parser.add_argument("--patch_thresh", type=float, default=35.0, help="Threshold in dBZ for extracting patches (default: 35.0 dBZ)")
     train_parser.add_argument("--patch_frac", type=float, default=0.01, help="Minimum fraction of pixels in patch above threshold (default: 0.01)")
     train_parser.add_argument("--use_patches", type=str, default="False", help="Whether to use patch-based training: True or False (default: False)")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")

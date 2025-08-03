@@ -18,17 +18,17 @@ class RadarWindowDataset(Dataset):
     
     This dataset loads full radar frames and creates input-output pairs
     for spatiotemporal prediction models.
-    
+
     Parameters
     ----------
     cube : np.ndarray
-        Radar data cube of shape (T, C, H, W) in original scale
+        Radar data cube of shape (T, C, H, W) in original scale.
     seq_in : int
-        Number of input time steps
+        Number of input time steps.
     seq_out : int
-        Number of output time steps
+        Number of output time steps.
     maxv : float, optional
-        Maximum value for normalization (default: 85.0)
+        Maximum value for normalization (default: 85.0).
     """
     
     def __init__(self, cube, seq_in, seq_out, maxv=85.0):
@@ -57,27 +57,27 @@ class PatchRadarWindowDataset(Dataset):
     This dataset extracts patches from radar frames and creates input-output pairs
     for training models on smaller spatial regions. Only patches with sufficient
     signal (above threshold) are included.
-    
+
     Parameters
     ----------
     cube : np.ndarray
-        Radar data cube of shape (T, C, H, W) in original scale
+        Radar data cube of shape (T, C, H, W) in original scale.
     seq_in : int
-        Number of input time steps
+        Number of input time steps.
     seq_out : int
-        Number of output time steps
+        Number of output time steps.
     patch_size : int, optional
-        Size of spatial patches (default: 64)
+        Size of spatial patches (default: 64).
     patch_stride : int, optional
-        Stride for patch extraction (default: 64)
+        Stride for patch extraction (default: 64).
     patch_thresh : float, optional
-        Threshold for patch selection in dBZ (default: 35)
+        Threshold for patch selection in dBZ (default: 35).
     patch_frac : float, optional
-        Minimum fraction of pixels above threshold (default: 0.15)
+        Minimum fraction of pixels above threshold (default: 0.01).
     patch_index_path : str, optional
-        Path to save/load patch indices for caching (default: None)
+        Path to save/load patch indices for caching (default: None).
     maxv : float, optional
-        Maximum value for normalization (default: 85.0)
+        Maximum value for normalization (default: 85.0).
     """
     
     def __init__(self, cube, seq_in, seq_out, patch_size=64, patch_stride=64, 
@@ -155,15 +155,15 @@ class NonNormalizedRadarWindowDataset(Dataset):
     
     This dataset loads full radar frames without applying normalization,
     useful for models that handle raw dBZ values directly.
-    
+
     Parameters
     ----------
     cube : np.ndarray
-        Radar data cube of shape (T, C, H, W) in original dBZ scale
+        Radar data cube of shape (T, C, H, W) in original dBZ scale.
     seq_in : int
-        Number of input time steps
+        Number of input time steps.
     seq_out : int
-        Number of output time steps
+        Number of output time steps.
     """
     
     def __init__(self, cube, seq_in, seq_out):

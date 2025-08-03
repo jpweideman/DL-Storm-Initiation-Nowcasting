@@ -76,7 +76,7 @@ class TrajGRUCell(nn.Module):
         if self.zoneout > 0.0 and self.training:
             mask = torch.empty_like(h_new).bernoulli_(1 - self.zoneout)
             h_new = torch.where(mask, h_new, h_prev)
-        
+
         return h_new
 
     def _warp(self, x, flow):
