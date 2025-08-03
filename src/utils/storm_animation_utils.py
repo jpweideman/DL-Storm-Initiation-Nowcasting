@@ -12,12 +12,23 @@ def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dil
     """
     Animate storm detection over time from radar reflectivity data using physical area calculations.
     
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - reflectivity_threshold: dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: minimum storm area in km² (default: 10.0)
-    - dilation_iterations: dilation iterations for storm smoothing (default: 5)
-    - interval: animation interval in milliseconds (default: 100)
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    reflectivity_threshold : float, optional
+        dBZ threshold for storm detection (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
+    interval : int, optional
+        Animation interval in milliseconds (default: 100).
+
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        Animation object.
     """
     fig, ax = plt.subplots(figsize=(6, 7))
     cmap = plt.get_cmap("jet")
@@ -60,13 +71,25 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
     """
     Animate storm detection over time from radar reflectivity data in polar coordinates using physical area calculations.
     
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - storm_threshold: dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: minimum storm area in km² (default: 10.0)
-    - dilation_iterations: dilation iterations for storm smoothing (default: 5)
-    - interval: animation interval in milliseconds (default: 100)
-    - figsize: figure size (default: (6, 6))
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    storm_threshold : float, optional
+        dBZ threshold for storm detection (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
+    interval : int, optional
+        Animation interval in milliseconds (default: 100).
+    figsize : tuple, optional
+        Figure size (default: (6, 6)).
+
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        Animation object.
     """
     T, H, W = data.shape  # H=azimuth_bins, W=range_bins
     theta = np.linspace(0, 2 * np.pi, H, endpoint=False)  # Azimuth angles
@@ -127,14 +150,27 @@ def animate_storms_polar_comparison(true_data, pred_data, storm_threshold=45, ar
     """
     Animate storm detection comparison between true and predicted radar reflectivity data in polar coordinates using physical area calculations.
     
-    Parameters:
-    - true_data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - pred_data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - storm_threshold: dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: minimum storm area in km² (default: 10.0)
-    - dilation_iterations: dilation iterations for storm smoothing (default: 5)
-    - interval: animation interval in milliseconds (default: 100)
-    - figsize: figure size (default: (12, 6))
+    Parameters
+    ----------
+    true_data : np.ndarray
+        True radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    pred_data : np.ndarray
+        Predicted radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    storm_threshold : float, optional
+        dBZ threshold for storm detection (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
+    interval : int, optional
+        Animation interval in milliseconds (default: 100).
+    figsize : tuple, optional
+        Figure size (default: (12, 6)).
+
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        Animation object.
     """
     assert true_data.shape == pred_data.shape, "Input arrays must have the same shape."
     T, H, W = true_data.shape  # H=azimuth_bins, W=range_bins
@@ -206,22 +242,37 @@ def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0,
     """
     Animate the progression of newly formed storms over time using radar reflectivity data.
     
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - reflectivity_threshold: float, dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: float, minimum storm area in km² (default: 10.0)
-    - dilation_iterations: int, dilation iterations for storm smoothing (default: 5)
-    - overlap_threshold: float, overlap threshold for new storm detection (default: 0.2)
-    - interval: int, animation interval in milliseconds (default: 200)
-    - use_displacement_prediction: bool, whether to use displacement-based prediction with patches (default: True)
-    - patch_size: int, size of patches for cross-correlation (default: 32)
-    - patch_stride: int, stride between patches (default: 16)
-    - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
-    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.015)
-    - maxv: float, maximum value for normalization (default: 85.0)
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    reflectivity_threshold : float, optional
+        dBZ threshold for storm detection (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
+    overlap_threshold : float, optional
+        Overlap threshold for new storm detection (default: 0.2).
+    interval : int, optional
+        Animation interval in milliseconds (default: 200).
+    use_displacement_prediction : bool, optional
+        Whether to use displacement-based prediction with patches (default: True).
+    patch_size : int, optional
+        Size of patches for cross-correlation (default: 32).
+    patch_stride : int, optional
+        Stride between patches (default: 16).
+    patch_thresh : float, optional
+        Threshold for patch selection in dBZ (default: 35.0).
+    patch_frac : float, optional
+        Minimum fraction of pixels above threshold (default: 0.015).
+    maxv : float, optional
+        Maximum value for normalization (default: 85.0).
     
-    Returns:
-    - ani: matplotlib.animation.FuncAnimation object
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        Animation object.
     """
     # Get new storm formations
     if use_displacement_prediction:
@@ -275,22 +326,35 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     """
     Animate new storm detection with displacement-based prediction visualization.
     
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - reflectivity_threshold: dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: minimum storm area in km² (default: 10.0)
-    - dilation_iterations: dilation iterations for storm smoothing (default: 5)
-    - overlap_threshold: overlap threshold for new storm detection (default: 0.1)
-    - interval: animation interval in milliseconds (default: 200)
-    - patch_size: int, size of patches for cross-correlation (default: 32)
-    - patch_stride: int, stride between patches (default: 16)
-    - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
-    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.015)
-    - maxv: float, maximum value for normalization (default: 85.0)
-
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    reflectivity_threshold : float, optional
+        dBZ threshold for storm detection (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
+    overlap_threshold : float, optional
+        Overlap threshold for new storm detection (default: 0.1).
+    interval : int, optional
+        Animation interval in milliseconds (default: 200).
+    patch_size : int, optional
+        Size of patches for cross-correlation (default: 32).
+    patch_stride : int, optional
+        Stride between patches (default: 16).
+    patch_thresh : float, optional
+        Threshold for patch selection in dBZ (default: 35.0).
+    patch_frac : float, optional
+        Minimum fraction of pixels above threshold (default: 0.015).
+    maxv : float, optional
+        Maximum value for normalization (default: 85.0).
     
-    Returns:
-    - ani: matplotlib.animation.FuncAnimation object
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        Animation object.
     """
 
     fig, ax = plt.subplots(figsize=(6, 7))
@@ -389,7 +453,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                 y_end = min(y_start + patch_size, data.shape[1])
                 x_end = min(x_start + patch_size, data.shape[2])
                 patch_mask[y_start:y_end, x_start:x_end] = True
-  
+
             # Plot displacement vectors as arrows on a global grid
             # Real arrows in patch regions, dummy arrows elsewhere
             step = 15  # Arrow grid density

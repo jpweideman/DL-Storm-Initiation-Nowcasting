@@ -103,10 +103,6 @@ def train_radar_model(
         wandb project name (default: "radar-forecasting").
     early_stopping_patience : int, optional
         Number of epochs with no improvement before early stopping (default: 10).
-
-    Returns
-    -------
-    None
     """
         
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
@@ -321,14 +317,6 @@ def predict_test_set(
         Number of hidden channels in the ConvLSTM bottleneck (default: 64).
         If a tuple or list is provided, multiple ConvLSTM layers are stacked in the bottleneck,
         with each value specifying the hidden size of each layer.
-
-    Returns
-    -------
-    None
-        This function does not return arrays. Instead, it saves the predictions and targets as memmap .npy files
-        (val_preds_dBZ.npy, val_targets_dBZ.npy) and saves their shape and dtype as .npz metadata files
-        (val_preds_dBZ_meta.npz, val_targets_dBZ_meta.npz) in the predictions_dir for later loading.
-        MSE metrics are saved in run_dir/results/ as JSON file.
     """
 
     import numpy as np

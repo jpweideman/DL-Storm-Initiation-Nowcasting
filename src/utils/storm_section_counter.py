@@ -8,13 +8,27 @@ from tqdm import tqdm
 def count_storms_by_section(data, interval_percent=5, batch_size=10, reflectivity_threshold=45, area_threshold=15, dilation_iterations=5, overlap_threshold=0.1):
     """
     Count the number of storms and new storms in each section of the data, processing each section in small, fixed-size batches.
-    Parameters:
-        data: np.ndarray, shape (T, H, W) or (N, C, H, W) (can be memmap)
-        interval_percent: int, percentage size of each section (e.g., 5 for 5%)
-        batch_size: int, number of frames to process at a time
-        reflectivity_threshold, area_threshold, dilation_iterations: passed to detect_storms
-        overlap_threshold: float, passed to detect_new_storm_formations
-    Returns:
+    
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar data of shape (T, H, W) or (N, C, H, W) (can be memmap).
+    interval_percent : int, optional
+        Percentage size of each section (e.g., 5 for 5%) (default: 5).
+    batch_size : int, optional
+        Number of frames to process at a time (default: 10).
+    reflectivity_threshold : float, optional
+        Threshold for storm detection (default: 45).
+    area_threshold : float, optional
+        Minimum storm area in km² (default: 15).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
+    overlap_threshold : float, optional
+        Overlap threshold for new storm detection (default: 0.1).
+    
+    Returns
+    -------
+    list
         List of dicts: [{"section": 1, "start": 0, "end": 10, "storm_count": 20, "new_storm_count": 5}, ...]
     """
     T = data.shape[0]

@@ -107,10 +107,6 @@ def train_radar_model(
         wandb project name (default: "radar-forecasting").
     early_stopping_patience : int, optional
         Number of epochs with no improvement before early stopping (default: 10).
-
-    Returns
-    -------
-    None
     """
     # Set default values if None
     if hidden_channels is None:
@@ -357,13 +353,6 @@ def predict_test_set(
     predictions_dir : str, optional
         Directory to save large prediction/target files (default: same as run_dir).
         If None, files are saved in run_dir. If specified, creates the directory if it doesn't exist.
-
-    Returns
-    -------
-    None
-        The function saves predictions and targets to disk if save_arrays=True, and prints MSE metrics
-        for different reflectivity ranges (0-20, 20-35, 35-45, 45-100 dBZ).
-        MSE metrics are saved in run_dir/results/ as JSON file.
     """
     # Set default values if None
     if hidden_channels is None:

@@ -78,10 +78,6 @@ def train_radar_model(
         Weights & Biases project name for experiment tracking.
     early_stopping_patience : int, optional
         Number of epochs with no improvement before early stopping (default: 10).
-
-    Returns
-    -------
-    None
     """
     if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
         raise ValueError("train_val_test_split must be a tuple/list of three floats (train, val, test)")
@@ -288,14 +284,6 @@ def predict_test_set(
     predictions_dir : str, optional
         Directory to save large prediction/target files (default: same as run_dir).
         If None, files are saved in run_dir. If specified, creates the directory if it doesn't exist.
-
-    Returns
-    -------
-    pred_all : np.ndarray
-        Array of shape (N, C, H, W) containing predicted radar reflectivity values.
-    tgt_all : np.ndarray
-        Array of shape (N, C, H, W) containing ground truth radar reflectivity values.
-        MSE metrics are saved in run_dir/results/ as JSON file.
     """
 
     device = device or "cpu"

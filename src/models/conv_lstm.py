@@ -3,6 +3,21 @@ import torch.nn as nn
 
 
 class ConvLSTMCell(nn.Module):
+    """
+    ConvLSTM Cell for spatiotemporal processing.
+    
+    A single ConvLSTM cell that applies LSTM operations with convolutional gates.
+    Processes spatial data while maintaining temporal memory through LSTM mechanisms.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    hid_ch : int
+        Number of hidden channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, hid_ch, kernel=3):
         super().__init__()
         assert kernel % 2 == 1, "Kernel size must be odd for ConvLSTM to preserve spatial dimensions!"
@@ -25,12 +40,22 @@ class ConvLSTMCell(nn.Module):
     
     
 class ConvLSTM(nn.Module):
+    """
+    ConvLSTM model for spatiotemporal prediction.
+    
+    A multi-layer ConvLSTM model that processes spatiotemporal data using convolutional LSTM cells.
+    Each layer contains a ConvLSTMCell that applies LSTM operations with convolutional gates.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    hidden_dims : list of int, optional
+        List of hidden dimensions for each ConvLSTM layer (default: (64, 64)).
+    kernel : int, optional
+        Kernel size for all ConvLSTM cells (default: 3).
+    """
     def __init__(self, in_ch, hidden_dims=(64, 64), kernel=3):
-        """
-        in_ch: input channels
-        hidden_dims: list of hidden dimensions per layer
-        kernel: kernel size
-        """
         super().__init__()
         self.layers = nn.ModuleList()
         for idx, h in enumerate(hidden_dims):

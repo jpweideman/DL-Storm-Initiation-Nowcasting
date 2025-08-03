@@ -4,6 +4,25 @@ import torch.nn.functional as F
 
 
 class TrajGRUCell(nn.Module):
+    """
+    TrajGRU Cell for spatiotemporal processing.
+    
+    A single TrajGRU cell that generates flow fields for warping and applies GRU operations.
+    Combines spatial warping with temporal gating for effective spatiotemporal modeling.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    hidden_channels : int
+        Number of hidden channels.
+    kernel_size : int, optional
+        Kernel size for convolutions (default: 3).
+    L : int, optional
+        Number of flow fields for warping (default: 5).
+    zoneout : float, optional
+        Zoneout probability for regularization (default: 0.0).
+    """
     def __init__(self, input_channels, hidden_channels, kernel_size=3, L=5, zoneout=0.0):
         super().__init__()
         self.input_channels = input_channels
@@ -81,6 +100,31 @@ class TrajGRUCell(nn.Module):
 
 
 class TrajGRU(nn.Module):
+    """
+    TrajGRU model for spatiotemporal prediction.
+    
+    A multi-layer TrajGRU model that processes spatiotemporal data using trajectory gated recurrent units.
+    Each layer contains a TrajGRUCell that generates flow fields for warping and applies GRU operations.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    hidden_channels : list of int
+        List of hidden channels for each TrajGRU layer.
+    kernel_size : int or list of int, optional
+        Kernel size(s) for TrajGRU cells (default: 3).
+        If int, same kernel size used for all layers.
+        If list, must match length of hidden_channels.
+    L : int or list of int, optional
+        Number of flow fields for each TrajGRU layer (default: 5).
+        If int, same L used for all layers.
+        If list, must match length of hidden_channels.
+    seq_len_in : int, optional
+        Input sequence length (default: 10).
+    seq_len_out : int, optional
+        Output sequence length (default: 1).
+    """
     def __init__(self, input_channels, hidden_channels, kernel_size=3, L=5, seq_len_in=10, seq_len_out=1):
         super().__init__()
         self.seq_len_in = seq_len_in

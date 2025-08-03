@@ -4,7 +4,21 @@ import torch.nn.functional as F
 
 
 class DoubleConv3D(nn.Module):
-    """(Conv3d => ReLU) * 2"""
+    """
+    Double 3D Convolution block.
+    
+    Applies two consecutive 3D convolutions with ReLU activation.
+    Used as a building block in the U-Net architecture.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    out_ch : int
+        Number of output channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, out_ch, kernel=3):
         super().__init__()
         p = kernel // 2
@@ -19,7 +33,21 @@ class DoubleConv3D(nn.Module):
 
 
 class Down3D(nn.Module):
-    """Downscaling with maxpool then double conv"""
+    """
+    3D Downscaling block.
+    
+    Applies max pooling followed by double convolution for downsampling.
+    Used in the encoder path of the U-Net architecture.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    out_ch : int
+        Number of output channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, out_ch, kernel=3):
         super().__init__()
         self.mpconv = nn.Sequential(
@@ -31,7 +59,23 @@ class Down3D(nn.Module):
 
 
 class Up3D(nn.Module):
-    """Upscaling then double conv"""
+    """
+    3D Upscaling block.
+    
+    Applies transposed convolution for upsampling followed by double convolution.
+    Used in the decoder path of the U-Net architecture.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    skip_ch : int
+        Number of channels from skip connection.
+    out_ch : int
+        Number of output channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, skip_ch, out_ch, kernel=3):
         super().__init__()
         self.up = nn.ConvTranspose3d(in_ch, in_ch // 2, 2, stride=2)
