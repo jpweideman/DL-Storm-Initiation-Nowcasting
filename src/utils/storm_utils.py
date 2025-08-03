@@ -13,13 +13,19 @@ def compute_csi_hss(pred, target, threshold):
     """
     Compute CSI (Critical Success Index) and HSS (Heidke Skill Score) for a given threshold.
     
-    Parameters:
-    - pred: np.ndarray, predicted values in dBZ
-    - target: np.ndarray, ground truth values in dBZ
-    - threshold: float, threshold in dBZ to convert to binary (0/1)
+    Parameters
+    ----------
+    pred : np.ndarray
+        Predicted values in dBZ.
+    target : np.ndarray
+        Ground truth values in dBZ.
+    threshold : float
+        Threshold in dBZ to convert to binary (0/1).
     
-    Returns:
-    - tuple: (CSI, HSS) scores
+    Returns
+    -------
+    tuple
+        (CSI, HSS) scores.
     """
     # Convert to binary using threshold
     pred_binary = (pred >= threshold).astype(int)
@@ -50,12 +56,17 @@ def compute_b_mse(pred, target):
     """
     Compute B-MSE (Balanced Mean Squared Error) using the same weighting scheme as in training.
     
-    Parameters:
-    - pred: np.ndarray, predicted values in dBZ
-    - target: np.ndarray, ground truth values in dBZ
+    Parameters
+    ----------
+    pred : np.ndarray
+        Predicted values in dBZ.
+    target : np.ndarray
+        Ground truth values in dBZ.
     
-    Returns:
-    - float: B-MSE value
+    Returns
+    -------
+    float
+        B-MSE value.
     """
     # Compute weights based on dBZ values directly
     w = np.ones_like(target)
@@ -74,12 +85,17 @@ def compute_forecasting_metrics(pred, target):
     """
     Compute comprehensive forecasting metrics including CSI, HSS, and B-MSE.
     
-    Parameters:
-    - pred: np.ndarray, predicted values in dBZ
-    - target: np.ndarray, ground truth values in dBZ
+    Parameters
+    ----------
+    pred : np.ndarray
+        Predicted values in dBZ.
+    target : np.ndarray
+        Ground truth values in dBZ.
     
-    Returns:
-    - dict: dictionary containing all metrics:
+    Returns
+    -------
+    dict
+        Dictionary containing all metrics:
         - 'b_mse': Balanced Mean Squared Error
         - 'csi_by_threshold': CSI scores for thresholds [2, 5, 10, 30, 45] dBZ
         - 'hss_by_threshold': HSS scores for thresholds [2, 5, 10, 30, 45] dBZ
@@ -107,14 +123,19 @@ def compute_polar_pixel_areas(shape, pixel_spacing_km=0.5):
     """
     Compute the physical area (in km²) of each pixel in polar radar coordinates.
     
-    Parameters:
-    - shape: tuple, shape of the radar data (azimuth_bins, range_bins) where:
+    Parameters
+    ----------
+    shape : tuple
+        Shape of the radar data (azimuth_bins, range_bins) where:
         - azimuth_bins: number of azimuth angles (typically 360)
         - range_bins: number of range bins at pixel_spacing_km intervals
-    - pixel_spacing_km: float, distance between pixels in km (default: 0.5)
+    pixel_spacing_km : float, optional
+        Distance between pixels in km (default: 0.5).
     
-    Returns:
-    - np.ndarray: array of shape (azimuth_bins, range_bins) containing the area of each pixel in km²
+    Returns
+    -------
+    np.ndarray
+        Array of shape (azimuth_bins, range_bins) containing the area of each pixel in km².
     """
     azimuth_bins, range_bins = shape
     
@@ -154,14 +175,21 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dila
     """
     Detects storms in radar data using physical area calculations for polar coordinates.
 
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) where H=azimuth_bins, W=range_bins
-    - reflectivity_threshold: float, threshold for storm detection in dBZ (default: 45)
-    - area_threshold_km2: float, minimum storm area in km² (default: 10.0)
-    - dilation_iterations: int, dilation iterations for storm smoothing (default: 5)
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar data of shape (T, H, W) where H=azimuth_bins, W=range_bins.
+    reflectivity_threshold : float, optional
+        Threshold for storm detection in dBZ (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Dilation iterations for storm smoothing (default: 5).
 
-    Returns:
-    - list: list of dictionaries containing storm count and coordinates per frame
+    Returns
+    -------
+    list
+        List of dictionaries containing storm count and coordinates per frame.
     """
     # Compute pixel areas for the radar geometry
     pixel_areas = compute_polar_pixel_areas(data.shape[1:])
@@ -218,12 +246,17 @@ def calculate_storm_durations(storm_results, overlap_threshold=0.2):
     """
     Calculate storm durations by tracking storms across time steps.
     
-    Parameters:
-    - storm_results: list, list of dicts from detect_storms()
-    - overlap_threshold: float, minimum overlap ratio to consider storms as the same (default: 0.2)
+    Parameters
+    ----------
+    storm_results : list
+        List of dicts from detect_storms().
+    overlap_threshold : float, optional
+        Minimum overlap ratio to consider storms as the same (default: 0.2).
     
-    Returns:
-    - list: list of dicts with duration information added
+    Returns
+    -------
+    list
+        List of dicts with duration information added.
     """
     if not storm_results:
         return storm_results
@@ -291,13 +324,19 @@ def calculate_contour_overlap(contour1, contour2, data_shape=None):
     """
     Calculate overlap between two storm contours using mask intersection.
     
-    Parameters:
-    - contour1: list, list of (x, y) coordinates for first contour
-    - contour2: list, list of (x, y) coordinates for second contour
-    - data_shape: tuple, (height, width) for creating masks. If None, will estimate from contours (default: None)
+    Parameters
+    ----------
+    contour1 : list
+        List of (x, y) coordinates for first contour.
+    contour2 : list
+        List of (x, y) coordinates for second contour.
+    data_shape : tuple, optional
+        (height, width) for creating masks. If None, will estimate from contours (default: None).
     
-    Returns:
-    - float: overlap ratio (0 to 1)
+    Returns
+    -------
+    float
+        Overlap ratio (0 to 1).
     """
     try:
         # Convert to numpy arrays
@@ -355,24 +394,40 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     """
     Detects new storm formations using either displacement-based prediction (with patches) or simple overlap tracking.
     
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) - radar reflectivity data over time
-    - reflectivity_threshold: float - dBZ threshold for storm detection (default: 45)
-    - area_threshold_km2: float - minimum storm area in km² (default: 10.0)
-    - dilation_iterations: int - number of dilation iterations for storm smoothing (default: 5)
-    - overlap_threshold: float - overlap threshold for determining if a storm is new (default: 0.2)
-    - storm_tracking_overlap_threshold: float - overlap threshold for tracking storms across time steps (default: 0.2)
-    - use_displacement_prediction: bool - whether to use displacement-based prediction with patches (default: True)
-    - patch_size: int - size of patches for cross-correlation (default: 32)
-    - patch_stride: int - stride between patches (default: 16)
-    - patch_thresh: float - threshold for patch selection in dBZ (default: 35.0)
-    - patch_frac: float - minimum fraction of pixels above threshold (default: 0.015)
-    - maxv: float - maximum value for normalization (default: 85.0)
-    - max_displacement: int - maximum expected displacement in pixels (default: 100)
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar reflectivity data of shape (T, H, W) over time.
+    reflectivity_threshold : float, optional
+        dBZ threshold for storm detection (default: 45).
+    area_threshold_km2 : float, optional
+        Minimum storm area in km² (default: 10.0).
+    dilation_iterations : int, optional
+        Number of dilation iterations for storm smoothing (default: 5).
+    overlap_threshold : float, optional
+        Overlap threshold for determining if a storm is new (default: 0.2).
+    storm_tracking_overlap_threshold : float, optional
+        Overlap threshold for tracking storms across time steps (default: 0.2).
+    use_displacement_prediction : bool, optional
+        Whether to use displacement-based prediction with patches (default: True).
+    patch_size : int, optional
+        Size of patches for cross-correlation (default: 32).
+    patch_stride : int, optional
+        Stride between patches (default: 16).
+    patch_thresh : float, optional
+        Threshold for patch selection in dBZ (default: 35.0).
+    patch_frac : float, optional
+        Minimum fraction of pixels above threshold (default: 0.015).
+    maxv : float, optional
+        Maximum value for normalization (default: 85.0).
+    max_displacement : int, optional
+        Maximum expected displacement in pixels (default: 100).
     
-    Returns:
-    - If use_displacement_prediction=True: tuple of (new_storms_summary, displacement_fields, selected_patch_centers)
-    - If use_displacement_prediction=False: new_storms_summary only (simple overlap tracking)
+    Returns
+    -------
+    tuple or list
+        If use_displacement_prediction=True: tuple of (new_storms_summary, displacement_fields, selected_patch_centers)
+        If use_displacement_prediction=False: new_storms_summary only (simple overlap tracking)
     """
     storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
     
@@ -519,21 +574,31 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
     Compute displacement vectors using patch-based cross-correlation between consecutive frames.
     These vectors represent pixel displacement caused by wind/advection.
     
-    Parameters:
-    - data: np.ndarray of shape (T, H, W) - radar reflectivity data
-    - patch_size: int, size of patches for cross-correlation (default: 64)
-    - patch_stride: int, stride between patches (default: 32)
-    - max_displacement: int, maximum expected displacement in pixels (default: 100)
-    - show_progress: bool, whether to show progress bar (default: True)
-    - patch_thresh: float, threshold for patch selection in dBZ (default: 35.0)
-    - patch_frac: float, minimum fraction of pixels above threshold (default: 0.025)
-    - maxv: float, maximum value for normalization (default: 85.0)
-
+    Parameters
+    ----------
+    data : np.ndarray
+        Radar reflectivity data of shape (T, H, W).
+    patch_size : int, optional
+        Size of patches for cross-correlation (default: 32).
+    patch_stride : int, optional
+        Stride between patches (default: 16).
+    max_displacement : int, optional
+        Maximum expected displacement in pixels (default: 100).
+    show_progress : bool, optional
+        Whether to show progress bar (default: True).
+    patch_thresh : float, optional
+        Threshold for patch selection in dBZ (default: 35.0).
+    patch_frac : float, optional
+        Minimum fraction of pixels above threshold (default: 0.015).
+    maxv : float, optional
+        Maximum value for normalization (default: 85.0).
     
-    Returns:
-    - displacement_vectors: np.ndarray of shape (T-1, 2) - (u, v) displacement components for each time step
-    - displacement_fields: np.ndarray of shape (T-1, H, W, 2) - displacement field for each time step
-    - selected_patch_centers: list of lists, patch centers selected for each time step
+    Returns
+    -------
+    tuple
+        - displacement_vectors: np.ndarray of shape (T-1, 2) - (u, v) displacement components for each time step
+        - displacement_fields: np.ndarray of shape (T-1, H, W, 2) - displacement field for each time step
+        - selected_patch_centers: list of lists, patch centers selected for each time step
     """
     T, H, W = data.shape
     
@@ -673,13 +738,19 @@ def create_displacement_field(patch_displacements, patch_positions, field_shape)
     """
     Create a displacement field by interpolating patch displacement vectors.
     
-    Parameters:
-    - patch_displacements: list, list of [u, v] displacement vectors for each patch
-    - patch_positions: list, list of [y, x] positions for each patch
-    - field_shape: tuple, (H, W) shape of the displacement field
+    Parameters
+    ----------
+    patch_displacements : list
+        List of [u, v] displacement vectors for each patch.
+    patch_positions : list
+        List of [y, x] positions for each patch.
+    field_shape : tuple
+        (H, W) shape of the displacement field.
     
-    Returns:
-    - np.ndarray: displacement field of shape (H, W, 2) - interpolated displacement field
+    Returns
+    -------
+    np.ndarray
+        Displacement field of shape (H, W, 2) - interpolated displacement field.
     """
     H, W = field_shape
     displacement_field = np.zeros((H, W, 2))
@@ -722,13 +793,19 @@ def predict_storm_positions(previous_storms, displacement_field, data_shape):
     """
     Predict where storms from the previous frame should be in the current frame based on displacement field.
     
-    Parameters:
-    - previous_storms: list, list of storm masks from previous frame
-    - displacement_field: np.ndarray of shape (H, W, 2), displacement field with (u, v) components at each pixel
-    - data_shape: tuple, (H, W) shape of the data
+    Parameters
+    ----------
+    previous_storms : list
+        List of storm masks from previous frame.
+    displacement_field : np.ndarray
+        Displacement field of shape (H, W, 2) with (u, v) components at each pixel.
+    data_shape : tuple
+        (H, W) shape of the data.
     
-    Returns:
-    - list: list of predicted storm masks
+    Returns
+    -------
+    list
+        List of predicted storm masks.
     """
     H, W = data_shape
     
@@ -772,13 +849,19 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     """
     Compares predicted and true new storm initiations.
 
-    Parameters:
-    - new_storms_pred: list, list of dicts from detect_new_storm_formations(pred_max_cappi)
-    - new_storms_true: list, list of dicts from detect_new_storm_formations(true_max_cappi)
-    - overlap_threshold: float, minimum overlap ratio to count as a match (default: 0.2)
+    Parameters
+    ----------
+    new_storms_pred : list
+        List of dicts from detect_new_storm_formations(pred_max_cappi).
+    new_storms_true : list
+        List of dicts from detect_new_storm_formations(true_max_cappi).
+    overlap_threshold : float, optional
+        Minimum overlap ratio to count as a match (default: 0.2).
 
-    Returns:
-    - dict: dictionary with counts and statistics:
+    Returns
+    -------
+    dict
+        Dictionary with counts and statistics:
         {
             "correct": int,  # matched at same time
             "early": int,    # matched one time step before
@@ -1010,11 +1093,15 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         """
         Calculate mean of values, returning None if no valid values.
         
-        Parameters:
-        - values: list, list of numeric values
+        Parameters
+        ----------
+        values : list
+            List of numeric values.
         
-        Returns:
-        - float or None: mean of values, or None if no valid values
+        Returns
+        -------
+        float or None
+            Mean of values, or None if no valid values.
         """
         vals = [v for v in values if v is not None]
         return float(np.mean(vals)) if vals else None  # Return None if no values
@@ -1084,9 +1171,9 @@ if __name__ == "__main__":
     parser.add_argument('--reflectivity_threshold', type=float, default=45, help='Reflectivity threshold for storm detection (default: 45)')
     parser.add_argument('--area_threshold_km2', type=float, default=10.0, help='Area threshold for storm detection in km² (default: 10.0)')
     parser.add_argument('--dilation_iterations', type=int, default=5, help='Dilation iterations for storm detection (default: 5)')
+   
     parser.add_argument('--use_displacement_prediction', action='store_true', default=True, help='Use displacement-based prediction for new storm detection (default: True)')
     parser.add_argument('--no_displacement_prediction', action='store_true', help='Disable displacement-based prediction (use overlap-based method)')
-
     parser.add_argument('--patch_size', type=int, default=32, help='Patch size for displacement computation (default: 32)')
     parser.add_argument('--patch_stride', type=int, default=16, help='Patch stride for displacement computation (default: 16)')
     parser.add_argument('--patch_thresh', type=float, default=35.0, help='Threshold for patch selection in dBZ (default: 35.0)')
@@ -1101,11 +1188,15 @@ if __name__ == "__main__":
         """
         Load numpy array with metadata support.
         
-        Parameters:
-        - array_path: str, path to the .npy file
+        Parameters
+        ----------
+        array_path : str
+            Path to the .npy file.
         
-        Returns:
-        - np.ndarray: loaded array
+        Returns
+        -------
+        np.ndarray
+            Loaded array.
         """
         meta_path = array_path.replace('.npy', '_meta.npz')
         if os.path.exists(meta_path):
@@ -1138,12 +1229,17 @@ if __name__ == "__main__":
         """
         Detect storms with progress tracking.
         
-        Parameters:
-        - data: np.ndarray, radar data
-        - **kwargs: additional keyword arguments passed to detect_new_storm_formations
+        Parameters
+        ----------
+        data : np.ndarray
+            Radar data.
+        **kwargs
+            Additional keyword arguments passed to detect_new_storm_formations.
         
-        Returns:
-        - result from detect_new_storm_formations
+        Returns
+        -------
+        result
+            Result from detect_new_storm_formations.
         """
         storms = []
         # Extract parameters for detect_storms (only the parameters it actually accepts)

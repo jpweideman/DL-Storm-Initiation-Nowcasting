@@ -112,10 +112,6 @@ def train_radar_model(
         List of kernel sizes for encoder Conv2d/decoder ConvTranspose2d (symmetric).
     conv_strides : list
         List of strides for encoder Conv2d/decoder ConvTranspose2d (symmetric).
-
-    Returns
-    -------
-    None
     """
     # Set default values if None
     if hidden_channels is None:
@@ -377,13 +373,6 @@ def predict_test_set(
         Whether to save predictions and targets as memory-mapped .npy files.
     predictions_dir : str
         Directory to save large prediction/target files (default: same as run_dir).
-
-    Returns
-    -------
-    None
-        The function saves predictions and targets to disk if save_arrays=True, and prints MSE metrics
-        for different reflectivity ranges (0-20, 20-35, 35-45, 45-100 dBZ).
-        MSE metrics are saved in run_dir/results/ as JSON file.
     """
     # Set default values if None
     if hidden_channels is None:

@@ -8,7 +8,7 @@ all_filenames = []
 
 # First, collect all relevant directories for progress bar
 join_targets = []   
-#for root, dirs, files in os.walk('Data'):           # for data in remote directory
+
 for root, dirs, files in os.walk('data/intermediate'):      # for data in intermediate directory
     dirs.sort(key=lambda x: int(x) if x.isdigit() else x)
     files.sort()

@@ -18,11 +18,6 @@ def conv3d_block(in_ch, out_ch, kernel_size=3, stride=1, padding=1):
         Stride (default: 1).
     padding : int, optional
         Padding (default: 1).
-
-    Returns
-    -------
-    nn.Sequential
-        3D convolutional block.
     """
     return nn.Sequential(
         nn.Conv3d(in_ch, out_ch, kernel_size, stride, padding),

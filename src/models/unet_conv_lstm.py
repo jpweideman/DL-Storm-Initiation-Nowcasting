@@ -4,7 +4,21 @@ import torch.nn.functional as F
 
 
 class DoubleConv(nn.Module):
-    """(Conv2d => ReLU) * 2"""
+    """
+    Double 2D Convolution block.
+    
+    Applies two consecutive 2D convolutions with ReLU activation.
+    Used as a building block in the U-Net architecture.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    out_ch : int
+        Number of output channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, out_ch, kernel=3):
         super().__init__()
         p = kernel // 2
@@ -20,7 +34,21 @@ class DoubleConv(nn.Module):
 
 
 class Down(nn.Module):
-    """Downscaling with maxpool then double conv"""
+    """
+    2D Downscaling block.
+    
+    Applies max pooling followed by double convolution for downsampling.
+    Used in the encoder path of the U-Net architecture.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    out_ch : int
+        Number of output channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, out_ch, kernel=3):
         super().__init__()
         self.mpconv = nn.Sequential(
@@ -33,7 +61,23 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    """Upscaling then double conv"""
+    """
+    2D Upscaling block.
+    
+    Applies transposed convolution for upsampling followed by double convolution.
+    Used in the decoder path of the U-Net architecture.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    skip_ch : int
+        Number of channels from skip connection.
+    out_ch : int
+        Number of output channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, skip_ch, out_ch, kernel=3):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_ch, in_ch // 2, 2, stride=2)
@@ -51,6 +95,21 @@ class Up(nn.Module):
 
 
 class ConvLSTMCell(nn.Module):
+    """
+    ConvLSTM Cell for spatiotemporal processing.
+    
+    A single ConvLSTM cell that applies LSTM operations with convolutional gates.
+    Processes spatial data while maintaining temporal memory through LSTM mechanisms.
+
+    Parameters
+    ----------
+    in_ch : int
+        Number of input channels.
+    hid_ch : int
+        Number of hidden channels.
+    kernel : int, optional
+        Kernel size for convolutions (default: 3).
+    """
     def __init__(self, in_ch, hid_ch, kernel=3):
         super().__init__()
         p = kernel // 2
@@ -74,6 +133,10 @@ class ConvLSTMCell(nn.Module):
 class UNetConvLSTM(nn.Module):
     """
     U-Net + ConvLSTM model for spatiotemporal prediction.
+    
+    Combines U-Net encoder-decoder architecture with ConvLSTM bottleneck for spatiotemporal forecasting.
+    The encoder processes spatial features, the ConvLSTM bottleneck handles temporal dynamics,
+    and the decoder reconstructs the spatial features.
 
     Parameters
     ----------
@@ -81,17 +144,17 @@ class UNetConvLSTM(nn.Module):
         Number of input channels.
     out_ch : int
         Number of output channels.
-    base_ch : int
-        Number of channels in the first encoder layer.
-    lstm_hid : int or tuple/list of int
-        Number of hidden channels in the ConvLSTM bottleneck.
+    base_ch : int, optional
+        Number of channels in the first encoder layer (default: 32).
+    lstm_hid : int or tuple/list of int, optional
+        Number of hidden channels in the ConvLSTM bottleneck (default: 64).
         If a tuple/list, multiple ConvLSTM layers are stacked.
         **Each entry corresponds to a single ConvLSTMCell (not a double block).**
         The number of entries determines the number of ConvLSTM layers in the bottleneck.
-    seq_len : int
-        Input sequence length (number of time steps).
-    kernel : int
-        Convolution kernel size for all convolutions (must be odd).
+    seq_len : int, optional
+        Input sequence length (number of time steps) (default: 10).
+    kernel : int, optional
+        Convolution kernel size for all convolutions (must be odd) (default: 3).
     """
     def __init__(self, in_ch, out_ch, base_ch=32, lstm_hid=64, seq_len=10, kernel=3):
         super().__init__()

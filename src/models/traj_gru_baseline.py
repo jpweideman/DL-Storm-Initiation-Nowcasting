@@ -4,6 +4,25 @@ import torch.nn.functional as F
 
 
 class TrajGRUCell(nn.Module):
+    """
+    TrajGRU Cell for spatiotemporal processing.
+    
+    A single TrajGRU cell that generates flow fields for warping and applies GRU operations.
+    Combines spatial warping with temporal gating for effective spatiotemporal modeling.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    hidden_channels : int
+        Number of hidden channels.
+    kernel_size : int, optional
+        Kernel size for convolutions (default: 3).
+    L : int, optional
+        Number of flow fields for warping (default: 5).
+    zoneout : float, optional
+        Zoneout probability for regularization (default: 0.0).
+    """
     def __init__(self, input_channels, hidden_channels, kernel_size=3, L=5, zoneout=0.0):
         super().__init__()
         self.input_channels = input_channels
@@ -81,21 +100,32 @@ class TrajGRUCell(nn.Module):
 
 class TrajGRUEncoderDecoder(nn.Module):
     """
-    Symmetric TrajGRU Encoder-Decoder model (no U-Net, no skip connections).
+    Symmetric TrajGRU Encoder-Decoder model for spatiotemporal prediction.
+    
     - Encoder: Alternates Conv2d (with stride for downsampling) and TrajGRU layers.
     - Decoder: Alternates TrajGRU and ConvTranspose2d (for upsampling) layers, using reversed parameters from encoder.
-    - All layer parameters (kernel, stride, channels, L, etc.) are configurable as lists (see below).
+    - All layer parameters (kernel, stride, channels, L, etc.) are configurable as lists.
     - No skip connections between encoder and decoder.
     - Input: (B, C, S, H, W) or (B, S, C, H, W) (see forward docstring).
-    Args:
-        input_channels: Number of input channels.
-        hidden_channels: List of hidden channels for each encoder/decoder layer.
-        kernel_size: List of kernel sizes for each encoder/decoder layer.
-        L: List of L values (number of flow fields) for each encoder/decoder layer.
-        conv_kernels: List of kernel sizes for encoder Conv2d/decoder ConvTranspose2d.
-        conv_strides: List of strides for encoder Conv2d/decoder ConvTranspose2d.
-        seq_len_in: Input sequence length.
-        seq_len_out: Output sequence length.
+
+    Parameters
+    ----------
+    input_channels : int
+        Number of input channels.
+    hidden_channels : list of int
+        List of hidden channels for each encoder/decoder layer.
+    kernel_size : list of int
+        List of kernel sizes for each encoder/decoder layer.
+    L : list of int
+        List of L values (number of flow fields) for each encoder/decoder layer.
+    conv_kernels : list of int
+        List of kernel sizes for encoder Conv2d/decoder ConvTranspose2d.
+    conv_strides : list of int
+        List of strides for encoder Conv2d/decoder ConvTranspose2d.
+    seq_len_in : int, optional
+        Input sequence length (default: 10).
+    seq_len_out : int, optional
+        Output sequence length (default: 1).
     """
     def __init__(self,
                  input_channels,
