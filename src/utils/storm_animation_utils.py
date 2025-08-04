@@ -491,7 +491,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                         u_scaled_clipped = np.clip(u_scaled, min_u, max_u)
                         v_scaled_clipped = np.clip(v_scaled, min_v, max_v)
                         
-                        # Always plot the arrow (now guaranteed to be within bounds)
+                        # Always plot the arrow (guaranteed to be within bounds)
                         arrow = ax.arrow(x, y, u_scaled_clipped, v_scaled_clipped,
                                          head_width=1.5, head_length=1.5,
                                          fc='red', ec='red', alpha=0.8, linewidth=1)

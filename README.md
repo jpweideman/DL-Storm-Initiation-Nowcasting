@@ -27,6 +27,10 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
      ```bash
      python src/data/join_processed_data.py
      ```
+   - Step 3: Remove ground clutter from the dataset:
+     ```bash
+     python src/data/remove_ground_clutter.py
+     ```
 
 3. **Train a Model**
    - Train a UNet 3D CNN model on the processed example dataset:

@@ -18,7 +18,7 @@ class RadarWindowDataset(Dataset):
     
     This dataset loads full radar frames and creates input-output pairs
     for spatiotemporal prediction models.
-
+    
     Parameters
     ----------
     cube : np.ndarray
@@ -57,7 +57,7 @@ class PatchRadarWindowDataset(Dataset):
     This dataset extracts patches from radar frames and creates input-output pairs
     for training models on smaller spatial regions. Only patches with sufficient
     signal (above threshold) are included.
-
+    
     Parameters
     ----------
     cube : np.ndarray
@@ -155,7 +155,7 @@ class NonNormalizedRadarWindowDataset(Dataset):
     
     This dataset loads full radar frames without applying normalization,
     useful for models that handle raw dBZ values directly.
-
+    
     Parameters
     ----------
     cube : np.ndarray
