@@ -1,6 +1,6 @@
 {
   "command": "test",
-  "npy_path": "data/processed/ZH_radar_dataset.npy",
+  "npy_path": "data/processed_example/ZH_radar_dataset.npy",
   "run_dir": "experiments/runs/unet3dcnn_example",
   "seq_len_in": 10,
   "seq_len_out": 1,
@@ -10,7 +10,7 @@
   "bottleneck_dims": "(32,)",
   "kernel_size": 3,
   "which": "best",
-  "device": "cuda",
+  "device": "cpu",
   "save_arrays": true,
   "predictions_dir": "predictions/unet3dcnn_example"
 }

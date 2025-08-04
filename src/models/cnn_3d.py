@@ -38,10 +38,8 @@ class Radar3DCNN(nn.Module):
         Hidden channels for each layer.
     kernel : int, optional
         Kernel size (default: 3).
-    seq_len_in : int, optional
-        Input sequence length (default: 10).
     """
-    def __init__(self, in_ch, hidden_dims=(64, 64), kernel=3, seq_len_in=10):
+    def __init__(self, in_ch, hidden_dims=(64, 64), kernel=3):
         super().__init__()
         layers = []
         last_ch = in_ch
@@ -49,13 +47,12 @@ class Radar3DCNN(nn.Module):
             layers.append(conv3d_block(last_ch, h, kernel_size=kernel, padding=kernel//2))
             last_ch = h
         self.encoder = nn.Sequential(*layers)
-        # Output: (B, hidden_dims[-1], seq_in, H, W)
+        # Output (B, hidden_dims[-1], seq_in, H, W)
         # Reduce temporal dimension (seq_in) to 1 by pooling, then output to in_ch
         self.temporal_pool = nn.AdaptiveAvgPool3d((1, None, None))
         self.to_out = nn.Conv2d(hidden_dims[-1], in_ch, 1)
         
     def forward(self, x):
-        # x: (B, seq_in, C, H, W) → (B, C, seq_in, H, W)
         B, S, C, H, W = x.shape
         x = x.permute(0, 2, 1, 3, 4)  # (B, C, S, H, W)
         x = self.encoder(x)            # (B, hidden, S, H, W)

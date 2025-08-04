@@ -5,7 +5,6 @@ This folder contains modular definitions of all deep learning models used for ra
 ## Available Models
 
 - **conv_lstm.py** — Convolutional LSTM model.
-- **conv_lstm_nonnormalized.py** — ConvLSTM variant for non-normalized data.
 - **traj_gru.py** — Trajectory GRU model.
 - **traj_gru_baseline.py** — Symmetric TrajGRU encoder-decoder model (no U-Net, no skip connections).
 - **cnn_3d.py** — 3D Convolutional Neural Network.
