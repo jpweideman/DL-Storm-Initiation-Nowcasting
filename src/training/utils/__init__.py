@@ -6,8 +6,7 @@ This module contains common utilities used across different training scripts.
 
 from .dataloaders import (
     RadarWindowDataset,
-    PatchRadarWindowDataset,
-    NonNormalizedRadarWindowDataset
+    PatchRadarWindowDataset
 )
 from .training_utils import (
     set_seed, 
@@ -19,8 +18,7 @@ from .training_utils import (
 
 __all__ = [
     'RadarWindowDataset',
-    'PatchRadarWindowDataset', 
-    'NonNormalizedRadarWindowDataset',
+    'PatchRadarWindowDataset',
     'set_seed',
     'atomic_save',
     'mse_loss',

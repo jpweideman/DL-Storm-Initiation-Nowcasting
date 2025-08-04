@@ -1,15 +1,3 @@
-#!/usr/bin/env python3
-"""
-Remove ground clutter from radar data.
-
-This script removes ground clutter from radar reflectivity data by setting
-data below a specified height above ground level (AGL) to 0. The height
-calculation uses the 4/3 Earth radius model to account for atmospheric
-refraction and Earth's curvature.
-
-Supports 4D radar data with shape (time, elevation, azimuth, range).
-"""
-
 import argparse
 import numpy as np
 import os

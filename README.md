@@ -116,7 +116,7 @@ Forecasting evaluation:
 
 ### **Visualizations**
 #### True vs Predicted Storms
-![Storm Animation Comparison](storm_animation_comparison.gif)
+![Storm Animation Comparison](storm_comparison.gif)
 #### Storms with Displacement (Accounting for Wind)
-![Storm Animation with Wind](storm_animation_with_wind.gif)
+![Storm Animation with Wind](storm_with_wind.gif)
 

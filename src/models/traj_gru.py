@@ -32,13 +32,13 @@ class TrajGRUCell(nn.Module):
         self.zoneout = zoneout
         padding = kernel_size // 2
         
-        # Input to hidden (i2h) - reset_gate, update_gate, new_mem
+        # Input to hidden (i2h)
         self.i2h = nn.Conv2d(input_channels, hidden_channels * 3, kernel_size, padding=padding)
         
-        # Hidden to hidden (h2h) - after warping, 1x1 conv
+        # Hidden to hidden (h2h) after warping, 1x1 conv
         self.ret = nn.Conv2d(hidden_channels * L, hidden_channels * 3, 1)
         
-        # Flow generation - separate layers 
+        # Flow generation, separate layers 
         self.i2f_conv1 = nn.Conv2d(input_channels, 32, kernel_size=(5, 5), padding=(2, 2))
         self.h2f_conv1 = nn.Conv2d(hidden_channels, 32, kernel_size=(5, 5), padding=(2, 2))
         self.flows_conv = nn.Conv2d(32, L * 2, kernel_size=(5, 5), padding=(2, 2))
@@ -91,7 +91,6 @@ class TrajGRUCell(nn.Module):
         
         vgrid = grid + flow
         
-        # Scale grid to [-1,1] 
         vgrid[:, 0, :, :] = 2.0 * vgrid[:, 0, :, :].clone() / max(W - 1, 1) - 1.0
         vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :].clone() / max(H - 1, 1) - 1.0
         vgrid = vgrid.permute(0, 2, 3, 1)

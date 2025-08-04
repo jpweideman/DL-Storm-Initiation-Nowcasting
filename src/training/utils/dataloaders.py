@@ -22,7 +22,7 @@ class RadarWindowDataset(Dataset):
     Parameters
     ----------
     cube : np.ndarray
-        Radar data cube of shape (T, C, H, W) in original scale.
+        Radar data cube of shape (T, C, H, W).
     seq_in : int
         Number of input time steps.
     seq_out : int
@@ -67,15 +67,15 @@ class PatchRadarWindowDataset(Dataset):
     seq_out : int
         Number of output time steps.
     patch_size : int, optional
-        Size of spatial patches (default: 64).
+        Size of patches to extract (default: 64).
     patch_stride : int, optional
         Stride for patch extraction (default: 64).
     patch_thresh : float, optional
-        Threshold for patch selection in dBZ (default: 35).
+        Threshold in dBZ for patch selection (default: 35).
     patch_frac : float, optional
         Minimum fraction of pixels above threshold (default: 0.01).
     patch_index_path : str, optional
-        Path to save/load patch indices for caching (default: None).
+        Path to save/load patch indices (default: None).
     maxv : float, optional
         Maximum value for normalization (default: 85.0).
     """
@@ -87,10 +87,10 @@ class PatchRadarWindowDataset(Dataset):
         self.seq_out = seq_out
         self.patch_size = patch_size
         self.patch_stride = patch_stride
-        self.patch_thresh = patch_thresh  # dBZ value
+        self.patch_thresh = patch_thresh
         self.patch_frac = patch_frac
         self.maxv = maxv
-        self.patches = []  # List of (t, y, x)
+        self.patches = []
         
         T, C, H, W = cube.shape
         last = T - seq_in - seq_out + 1
@@ -146,37 +146,4 @@ class PatchRadarWindowDataset(Dataset):
         ) / (self.maxv + 1e-6)
         X_patch = X_patch.astype(np.float32)
         Y_patch = Y_patch.astype(np.float32).squeeze(0)
-        return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x
-
-
-class NonNormalizedRadarWindowDataset(Dataset):
-    """
-    Dataset for loading radar data without normalization.
-    
-    This dataset loads full radar frames without applying normalization,
-    useful for models that handle raw dBZ values directly.
-    
-    Parameters
-    ----------
-    cube : np.ndarray
-        Radar data cube of shape (T, C, H, W) in original dBZ scale.
-    seq_in : int
-        Number of input time steps.
-    seq_out : int
-        Number of output time steps.
-    """
-    
-    def __init__(self, cube, seq_in, seq_out):
-        X, Y = [], []
-        last = cube.shape[0] - seq_in - seq_out + 1
-        for t in range(last):
-            X.append(cube[t:t+seq_in])
-            Y.append(cube[t+seq_in:t+seq_in+seq_out].squeeze(0))
-        self.X = np.stack(X).astype(np.float32)  # (N,seq_in,C,H,W)
-        self.Y = np.stack(Y).astype(np.float32)  # (N,C,H,W)
-
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, i):
-        return torch.from_numpy(self.X[i]), torch.from_numpy(self.Y[i]) 
+        return torch.from_numpy(X_patch), torch.from_numpy(Y_patch), t, y, x 
