@@ -17,7 +17,6 @@ import sys
 from pathlib import Path
 from typing import List
 
-# Add src to path for imports
 sys.path.append(str(Path(__file__).parent.parent))
 
 from tqdm import tqdm
@@ -88,16 +87,14 @@ def create_ground_clutter_mask(range_km: np.ndarray, elevation_deg: np.ndarray,
         Boolean mask where True indicates valid data (above clutter height).
         Shape: (len(elevation_deg), len(range_km))
     """
-    # Create meshgrid for range and elevation
     range_grid, elev_grid = np.meshgrid(range_km, elevation_deg)
     
-    # Convert radar height to kilometers
     radar_height_km = radar_height_above_ground_m / 1000.0
     
     # Calculate height AGL for each pixel
     height_agl = calculate_height_agl(range_grid, elev_grid, radar_height_km)
     
-    # Create mask: True where height > clutter_height
+    # Mask is True where height > clutter_height
     mask = height_agl > clutter_height_km
     
     return mask
@@ -105,7 +102,8 @@ def create_ground_clutter_mask(range_km: np.ndarray, elevation_deg: np.ndarray,
 
 def remove_ground_clutter_chunked(radar_data: np.ndarray, range_km: np.ndarray, 
                                  elevation_deg: np.ndarray, clutter_height_km: float = 1.0,
-                                 radar_height_above_ground_m: float = 0.0, chunk_size: int = 100) -> np.ndarray:
+                                 radar_height_above_ground_m: float = 0.0, chunk_size: int = 100,
+                                 output_file: str = None) -> np.ndarray:
     """
     Remove ground clutter from radar data using chunked processing for memory efficiency.
     
@@ -125,40 +123,35 @@ def remove_ground_clutter_chunked(radar_data: np.ndarray, range_km: np.ndarray,
         Height of radar antenna above ground in meters (default: 0.0).
     chunk_size : int, optional
         Number of time steps to process at once (default: 100).
+    output_file : str
+        Output file path for memory-mapped array.
     
     Returns
     -------
     np.ndarray
         Radar data with ground clutter removed (set to 0).
     """
-    # Create clutter mask once (reused for all chunks)
     clutter_mask = create_ground_clutter_mask(range_km, elevation_deg, 
                                              clutter_height_km, radar_height_above_ground_m)
     
-    # Get total time steps
     total_time_steps = radar_data.shape[0]
     
-    # Initialize output array
-    cleaned_data = np.zeros_like(radar_data)
+    cleaned_data = np.lib.format.open_memmap(output_file, mode='w+', dtype='float32', 
+                                            shape=radar_data.shape)
     
-    # Process in chunks with tqdm progress bar
     for start_idx in tqdm(range(0, total_time_steps, chunk_size), 
                          desc="Removing ground clutter", unit="chunk"):
         end_idx = min(start_idx + chunk_size, total_time_steps)
         
-        # Extract chunk
-        chunk = radar_data[start_idx:end_idx]  # Shape: (chunk_size, elevation, azimuth, range)
+        chunk = radar_data[start_idx:end_idx]  
         
-        # Apply clutter mask to chunk
-        # Expand mask to match chunk dimensions: (elevation, range) -> (chunk_size, elevation, azimuth, range)
-        chunk_mask = np.expand_dims(clutter_mask, 0)  # (1, elevation, range)
-        chunk_mask = np.expand_dims(chunk_mask, 2)    # (1, elevation, 1, range)
-        chunk_mask = np.repeat(chunk_mask, chunk.shape[0], axis=0)  # (chunk_size, elevation, 1, range)
-        chunk_mask = np.repeat(chunk_mask, chunk.shape[2], axis=2)  # (chunk_size, elevation, azimuth, range)
+        chunk_mask = np.expand_dims(clutter_mask, 0)  
+        chunk_mask = np.expand_dims(chunk_mask, 2)    
+        chunk_mask = np.repeat(chunk_mask, chunk.shape[0], axis=0)  
+        chunk_mask = np.repeat(chunk_mask, chunk.shape[2], axis=2)  
         
         cleaned_chunk = chunk * chunk_mask
         
-        # Store cleaned chunk
         cleaned_data[start_idx:end_idx] = cleaned_chunk
     
     return cleaned_data
@@ -209,13 +202,10 @@ def main():
         epilog=__doc__
     )
     
-    # Input/Output arguments
     parser.add_argument('--input_file', type=str, default="data/processed/ZH_radar_dataset_raw.npy",
                        help='Path to input radar data file (.npy, default: data/processed/ZH_radar_dataset_raw.npy)')
     parser.add_argument('--output_file', type=str, default="data/processed/ZH_radar_dataset.npy",
                        help='Path to output cleaned radar data file (.npy, default: data/processed/ZH_radar_dataset.npy)')
-    
-    # Optional arguments
     parser.add_argument('--clutter_height', type=float, default=1.0,
                        help='Height above ground level below which to set data to 0 (km, default: 1.0)')
     parser.add_argument('--radar_height_above_ground', type=float, default=38.0,
@@ -252,10 +242,10 @@ def main():
     # Create range array
     range_km = create_range_array(args.max_range, args.range_resolution)
     
-    # Load radar data
+    # Load radar data 
     print(f"Loading radar data from: {args.input_file}")
     try:
-        radar_data = np.load(args.input_file)
+        radar_data = np.load(args.input_file, mmap_mode='r')
     except Exception as e:
         print(f"Error loading radar data: {e}")
         sys.exit(1)
@@ -279,22 +269,17 @@ def main():
     print(f"Clutter height threshold: {args.clutter_height} km above ground")
     print(f"Radar height: {args.radar_height_above_ground} m above ground")
     
-    # Remove ground clutter
+    # Remove ground clutter with memory mapping
     cleaned_data = remove_ground_clutter_chunked(
         radar_data, range_km, elevation_deg, 
         clutter_height_km=args.clutter_height,
         radar_height_above_ground_m=args.radar_height_above_ground,
-        chunk_size=args.chunk_size
+        chunk_size=args.chunk_size,
+        output_file=args.output_file
     )
     
-    # Save cleaned data
-    print(f"Saving cleaned data to: {args.output_file}")
-    try:
-        np.save(args.output_file, cleaned_data)
 
-    except Exception as e:
-        print(f"Error saving cleaned data: {e}")
-        sys.exit(1)
+    print(f"Cleaned data saved to: {args.output_file}")
 
 
 if __name__ == "__main__":
