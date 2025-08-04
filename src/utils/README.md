@@ -54,7 +54,7 @@ python src/utils/storm_section_counter.py \
 
 ## Animation & Visualization
 
-See the `notebooks/` folder for examples of how to use the animation functions.
+See `notebooks/storm_animation.ipynb` for examples of how to use the animation functions.
 
 ## Storm Detection and Initiation Features
 

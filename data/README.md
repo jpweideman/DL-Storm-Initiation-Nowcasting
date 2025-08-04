@@ -21,14 +21,17 @@ This folder contains all data used in the pipeline.
   - Contains final training-ready data files.
   - These are the files used by all training and evaluation scripts.
   - Clean, single large files for training input.
-  - Example: `data/processed/{ZH_radar_dataset.npy, ZH_radar_filenames.json}`
+  - Example: `data/processed/{ZH_radar_dataset_raw.npy, ZH_radar_dataset.npy, ZH_radar_filenames.json}`
 
 ## Data Flow
 
 1. **Raw Data**: Place raw `.h5` files in `data/raw/` (organized by year/month)
 2. **Intermediate Processing**: Run `src/data/data_processing.py` to create chunks in `data/intermediate/`
-3. **Final Joining**: Run `src/data/join_processed_data.py` to create final files in `data/processed/`
-4. **Training**: Use files from `data/processed/` for model training and evaluation
+3. **Joining**: Run `src/data/join_processed_data.py` to create raw dataset in `data/processed/ZH_radar_dataset_raw.npy`
+4. **Ground Clutter Removal**: Run `src/data/remove_ground_clutter.py` to create final cleaned dataset in `data/processed/ZH_radar_dataset.npy`
+5. **Training**: Use `data/processed/ZH_radar_dataset.npy` for model training and evaluation
+
+## File Naming
 
 
 See [src/data/README.md](../src/data/README.md) for detailed processing script documentation. 

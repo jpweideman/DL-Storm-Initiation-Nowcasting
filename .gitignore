@@ -18,5 +18,6 @@ data/processed_example/
 storm_*.json
 
 !notebooks/storm_animation.ipynb
+!notebooks/ground_clutter.ipynb
 !experiments/runs/storm_*.jsondata/processed_example/
 
