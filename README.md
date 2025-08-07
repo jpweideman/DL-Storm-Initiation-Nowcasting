@@ -52,6 +52,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --no_wandb
      ```
    - Arguments used for the run are saved as `args.json` in the run directory.
+   - Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/      best_validation_metrics.json` whenever a new best validation score is achieved.
 
 4. **Test a Model**
    - Run testing on the test set using the trained UNet 3D CNN model:
@@ -109,10 +110,12 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 - *Storm Initiation Metrics*: Evaluates correct, early, late, and false positive storm initiations
 
 ### **Forecasting Performance Metrics**
-Forecasting evaluation:
+Forecasting evaluation (on test set):
 - *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges
 - *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ
 - *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ
+
+During training, validation metrics are automatically computed and logged after each epoch. When a new best validation score is achieved, all metrics are saved to `results/best_validation_metrics.json` in the run directory.
 
 ### **Visualizations**
 #### True vs Predicted Storms

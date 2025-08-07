@@ -13,6 +13,7 @@ wandb_old/
 old_scripts/
 runs/
 experiments_copy/
+experiments_before_final/
 
 data/processed_example/
 

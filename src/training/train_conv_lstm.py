@@ -218,6 +218,8 @@ def train_radar_model(
     def run_epoch(dl, train=True):
         model.train() if train else model.eval()
         tot=0.0
+        all_preds = []
+        all_targets = []
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
                 xb, yb = batch
@@ -227,6 +229,62 @@ def train_radar_model(
                 if train:
                     optimizer.zero_grad(); loss.backward(); optimizer.step()
                 tot += loss.item()*xb.size(0)
+                if not train:
+                    all_preds.append(pred.detach().cpu())
+                    all_targets.append(yb.detach().cpu())
+        if not train:
+            import numpy as np
+            import json
+            from src.utils.storm_utils import compute_forecasting_metrics
+            from src.training.utils import mse_loss
+            preds = torch.cat(all_preds, dim=0)
+            targets = torch.cat(all_targets, dim=0)
+            # Convert to dBZ
+            maxv = 85.0
+            preds_dBZ = preds * maxv
+            targets_dBZ = targets * maxv
+            
+            # Compute forecasting metrics
+            metrics = compute_forecasting_metrics(preds_dBZ.numpy(), targets_dBZ.numpy())
+            mse = ((preds_dBZ - targets_dBZ) ** 2).mean().item()
+            
+            # Compute MSE by dBZ bins
+            ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
+            mse_by_range = {}
+            for r_min, r_max in ranges:
+                mask = (targets_dBZ >= r_min) & (targets_dBZ < r_max)
+                n_pix = torch.sum(mask).item()
+                if n_pix > 0:
+                    mse_bin = torch.sum(((preds_dBZ[mask] - targets_dBZ[mask]) ** 2)).item() / n_pix
+                    mse_by_range[f"mse_{r_min}_{r_max}"] = mse_bin
+                else:
+                    mse_by_range[f"mse_{r_min}_{r_max}"] = np.nan
+            
+            print("Validation metrics:")
+            print(f"  B-MSE: {metrics['b_mse']:.4f}")
+            for th, csi in metrics['csi_by_threshold'].items():
+                print(f"  CSI {th}: {csi:.4f}")
+            for th, hss in metrics['hss_by_threshold'].items():
+                print(f"  HSS {th}: {hss:.4f}")
+            print(f"  MSE: {mse:.4f}")
+            for range_name, mse_val in mse_by_range.items():
+                print(f"  {range_name}: {mse_val:.4f}")
+            
+            if not args.no_wandb:
+                wandb.log({**{f"val_{k}": v for k, v in metrics['csi_by_threshold'].items()},
+                           **{f"val_{k}": v for k, v in metrics['hss_by_threshold'].items()},
+                           "val_b_mse": metrics['b_mse'],
+                           "val_mse": mse,
+                           **{f"val_{k}": v for k, v in mse_by_range.items()}})
+            
+            # Store metrics for potential saving
+            run_epoch.validation_metrics = {
+                "b_mse": metrics['b_mse'],
+                "mse": mse,
+                "csi_by_threshold": metrics['csi_by_threshold'],
+                "hss_by_threshold": metrics['hss_by_threshold'],
+                "mse_by_range": mse_by_range
+            }
         return tot/len(dl.dataset)
 
     for ep in range(start_ep, end_epoch+1):
@@ -245,6 +303,20 @@ def train_radar_model(
             if not args.no_wandb:
                 wandb.log({'best_val_loss':best_val})
             epochs_since_improvement = 0
+            
+            # Save validation metrics to JSON when new best is achieved
+            if hasattr(run_epoch, 'validation_metrics'):
+                import json
+                results_dir = save_dir / "results"
+                results_dir.mkdir(exist_ok=True)
+                metrics_to_save = {
+                    "epoch": ep,
+                    "val_loss": vl,
+                    **run_epoch.validation_metrics
+                }
+                with open(results_dir / "best_validation_metrics.json", "w") as f:
+                    json.dump(metrics_to_save, f, indent=2)
+                print(f"Validation metrics saved to {results_dir}/best_validation_metrics.json")
         else:
             epochs_since_improvement += 1
         # Only apply early stopping if patience > 0
