@@ -145,7 +145,7 @@ def train_radar_model(
         print(f"Samples  train={len(train_ds)}  val={len(val_ds)}")
 
     # model, optimizer, loss
-    model     = CNN3D(in_ch=C, hidden_dims=hidden_dims, kernel=kernel_size, seq_len_in=seq_len_in).to(device)
+    model     = CNN3D(in_ch=C, hidden_dims=hidden_dims, kernel=kernel_size).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     if loss_name == "mse":
         criterion = lambda pred, tgt: mse_loss(pred, tgt, maxv=maxv, eps=eps)
