@@ -272,8 +272,26 @@ def train_radar_model(
     def run_epoch(dl, train=True):
         model.train() if train else model.eval()
         tot=0.0
-        all_preds = []
-        all_targets = []
+        
+        if not train:
+            # Initialize running statistics for batch-by-batch metric computation
+            import numpy as np
+            from src.utils.storm_utils import compute_forecasting_metrics
+            
+            # For MSE by dBZ bins
+            ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
+            mse_by_range = {f"mse_{r_min}_{r_max}": {"sum": 0.0, "count": 0} for r_min, r_max in ranges}
+            
+            # For overall MSE
+            total_mse_sum = 0.0
+            total_pixels = 0
+            
+            # For storm metrics (we'll accumulate predictions in chunks to avoid memory issues)
+            chunk_size = 100  # Process 100 samples at a time for storm metrics
+            pred_chunks = []
+            target_chunks = []
+            chunk_count = 0
+        
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
                 if use_patches:
@@ -293,62 +311,103 @@ def train_radar_model(
                 if train:
                     optimizer.zero_grad(); loss.backward(); optimizer.step()
                 tot += loss.item()*xb.size(0)
+                
                 if not train:
-                    all_preds.append(pred.detach().cpu())
-                    all_targets.append(yb.detach().cpu())
+                    # Convert to dBZ for metric computation
+                    maxv = 85.0
+                    pred_dBZ = pred.detach() * maxv
+                    target_dBZ = yb.detach() * maxv
+                    
+                    # Ensure both tensors have the same shape for metric computation
+                    if pred_dBZ.shape != target_dBZ.shape:
+                        # Remove singleton dimensions to match shapes
+                        pred_dBZ = pred_dBZ.squeeze()
+                        target_dBZ = target_dBZ.squeeze()
+                    
+                    # Compute MSE by dBZ bins batch by batch
+                    for r_min, r_max in ranges:
+                        mask = (target_dBZ >= r_min) & (target_dBZ < r_max)
+                        n_pix = torch.sum(mask).item()
+                        if n_pix > 0:
+                            mse_bin = torch.sum(((pred_dBZ[mask] - target_dBZ[mask]) ** 2)).item()
+                            mse_by_range[f"mse_{r_min}_{r_max}"]["sum"] += mse_bin
+                            mse_by_range[f"mse_{r_min}_{r_max}"]["count"] += n_pix
+                    
+                    # Compute overall MSE
+                    batch_mse = torch.sum(((pred_dBZ - target_dBZ) ** 2)).item()
+                    total_mse_sum += batch_mse
+                    total_pixels += pred_dBZ.numel()
+                    
+                    # Accumulate predictions for storm metrics (in chunks to manage memory)
+                    pred_chunks.append(pred_dBZ.cpu().numpy())
+                    target_chunks.append(target_dBZ.cpu().numpy())
+                    chunk_count += 1
+                    
+                    # Process chunks when we have enough or at the end
+                    if chunk_count >= chunk_size or chunk_count == len(dl):
+                        # Concatenate chunks
+                        pred_batch = np.concatenate(pred_chunks, axis=0)
+                        target_batch = np.concatenate(target_chunks, axis=0)
+                        
+                        # Compute storm metrics for this chunk
+                        chunk_metrics = compute_forecasting_metrics(pred_batch, target_batch)
+                        
+                        # Initialize or accumulate storm metrics
+                        if chunk_count == chunk_size:  # First chunk
+                            storm_metrics = chunk_metrics
+                        else:  # Accumulate metrics (simple averaging for now)
+                            for key in storm_metrics:
+                                if key in chunk_metrics:
+                                    if isinstance(storm_metrics[key], dict):
+                                        for subkey in storm_metrics[key]:
+                                            if subkey in chunk_metrics[key]:
+                                                storm_metrics[key][subkey] = (storm_metrics[key][subkey] + chunk_metrics[key][subkey]) / 2
+                                    else:
+                                        storm_metrics[key] = (storm_metrics[key] + chunk_metrics[key]) / 2
+                        
+                        # Clear chunks to free memory
+                        pred_chunks = []
+                        target_chunks = []
+                        chunk_count = 0
+        
         if not train:
-            import numpy as np
-            import json
-            from src.utils.storm_utils import compute_forecasting_metrics
-            from src.training.utils import mse_loss
-            preds = torch.cat(all_preds, dim=0)
-            targets = torch.cat(all_targets, dim=0)
-            # Convert to dBZ
-            maxv = 85.0
-            preds_dBZ = preds * maxv
-            targets_dBZ = targets * maxv
-            
-            # Compute forecasting metrics
-            metrics = compute_forecasting_metrics(preds_dBZ.numpy(), targets_dBZ.numpy())
-            mse = ((preds_dBZ - targets_dBZ) ** 2).mean().item()
-            
-            # Compute MSE by dBZ bins
-            ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
-            mse_by_range = {}
-            for r_min, r_max in ranges:
-                mask = (targets_dBZ >= r_min) & (targets_dBZ < r_max)
-                n_pix = torch.sum(mask).item()
-                if n_pix > 0:
-                    mse_bin = torch.sum(((preds_dBZ[mask] - targets_dBZ[mask]) ** 2)).item() / n_pix
-                    mse_by_range[f"mse_{r_min}_{r_max}"] = mse_bin
+            # Finalize MSE by dBZ bins
+            final_mse_by_range = {}
+            for range_name, stats in mse_by_range.items():
+                if stats["count"] > 0:
+                    final_mse_by_range[range_name] = stats["sum"] / stats["count"]
                 else:
-                    mse_by_range[f"mse_{r_min}_{r_max}"] = np.nan
+                    final_mse_by_range[range_name] = np.nan
+            
+            # Finalize overall MSE
+            final_mse = total_mse_sum / total_pixels if total_pixels > 0 else np.nan
             
             print("Validation metrics:")
-            print(f"  B-MSE: {metrics['b_mse']:.4f}")
-            for th, csi in metrics['csi_by_threshold'].items():
+            print(f"  B-MSE: {storm_metrics['b_mse']:.4f}")
+            for th, csi in storm_metrics['csi_by_threshold'].items():
                 print(f"  CSI {th}: {csi:.4f}")
-            for th, hss in metrics['hss_by_threshold'].items():
+            for th, hss in storm_metrics['hss_by_threshold'].items():
                 print(f"  HSS {th}: {hss:.4f}")
-            print(f"  MSE: {mse:.4f}")
-            for range_name, mse_val in mse_by_range.items():
+            print(f"  MSE: {final_mse:.4f}")
+            for range_name, mse_val in final_mse_by_range.items():
                 print(f"  {range_name}: {mse_val:.4f}")
             
             if not args.no_wandb:
-                wandb.log({**{f"val_{k}": v for k, v in metrics['csi_by_threshold'].items()},
-                           **{f"val_{k}": v for k, v in metrics['hss_by_threshold'].items()},
-                           "val_b_mse": metrics['b_mse'],
-                           "val_mse": mse,
-                           **{f"val_{k}": v for k, v in mse_by_range.items()}})
+                wandb.log({**{f"val_{k}": v for k, v in storm_metrics['csi_by_threshold'].items()},
+                           **{f"val_{k}": v for k, v in storm_metrics['hss_by_threshold'].items()},
+                           "val_b_mse": storm_metrics['b_mse'],
+                           "val_mse": final_mse,
+                           **{f"val_{k}": v for k, v in final_mse_by_range.items()}})
             
             # Store metrics for potential saving
             run_epoch.validation_metrics = {
-                "b_mse": metrics['b_mse'],
-                "mse": mse,
-                "csi_by_threshold": metrics['csi_by_threshold'],
-                "hss_by_threshold": metrics['hss_by_threshold'],
-                "mse_by_range": mse_by_range
+                "b_mse": storm_metrics['b_mse'],
+                "mse": final_mse,
+                "csi_by_threshold": storm_metrics['csi_by_threshold'],
+                "hss_by_threshold": storm_metrics['hss_by_threshold'],
+                "mse_by_range": final_mse_by_range
             }
+        
         return tot/len(dl.dataset)
 
     for ep in range(start_ep, end_epoch+1):
