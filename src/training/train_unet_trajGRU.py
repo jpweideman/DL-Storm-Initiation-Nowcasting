@@ -148,26 +148,26 @@ def train_radar_model(
     # DataLoaders
     if use_patches:
         patch_index_path = str(save_dir / "patch_indices.npy")
-        full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
+        patch_ds = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
         train_idx = []
-        val_idx = []
-        for i, (t, y, x) in enumerate(full_ds.patches):
+        for i, (t, y, x) in enumerate(patch_ds.patches):
             if t in idx_train:
                 train_idx.append(i)
-            elif t in idx_val:
-                val_idx.append(i)
-        train_ds = Subset(full_ds, train_idx)
-        val_ds   = Subset(full_ds, val_idx)
+        train_ds = Subset(patch_ds, train_idx)
         train_dl = DataLoader(train_ds, batch_size, shuffle=False)
-        val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
-        print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}")
+        
+        # Validation always use full frames 
+        full_ds = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
+        val_ds = Subset(full_ds, idx_val)
+        val_dl = DataLoader(val_ds, batch_size, shuffle=False)
+        print(f"Patch-based training: train_patches={len(train_ds)}, val_fullframes={len(val_ds)}")
     else:
         full_ds  = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
         train_ds = Subset(full_ds, idx_train)
         val_ds   = Subset(full_ds, idx_val)
         train_dl = DataLoader(train_ds, batch_size, shuffle=False)
         val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
-        print(f"Samples  train={len(train_ds)}  val={len(val_ds)}")
+        print(f"Full-frame training: train={len(train_ds)}, val={len(val_ds)}")
 
     # model, optimizer, loss
     # Check input channels
@@ -267,7 +267,7 @@ def train_radar_model(
         
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
-                if use_patches:
+                if use_patches and train:  # Only training uses patches 
                     xb, yb = batch[0], batch[1]
                 else:
                     xb, yb = batch
