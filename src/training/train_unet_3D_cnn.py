@@ -235,15 +235,13 @@ def train_radar_model(
             total_mse_sum = 0.0
             total_pixels = 0
             
-            # For storm metrics (we'll accumulate predictions in chunks to avoid memory issues)
-            chunk_size = 100  # Process 100 samples at a time for storm metrics
-            pred_chunks = []
-            target_chunks = []
-            chunk_count = 0
-            
-            # Initialize storm metrics accumulation
-            storm_metrics_sum = None
-            storm_metrics_count = 0
+            # For batch-by-batch metrics (B-MSE, CSI, HSS)
+            total_b_mse = 0.0
+            total_samples = 0
+            total_csi = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
+            total_hss = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
+            total_csi_count = 0
+            total_hss_count = 0
         
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
@@ -269,9 +267,8 @@ def train_radar_model(
                 
                 if not train:
                     # Convert to dBZ for metric computation
-                    maxv = 85.0 + 1e-6  # Use same maxv as b_mse_loss function
-                    pred_dBZ = pred.detach() * maxv
-                    target_dBZ = yb.detach() * maxv
+                    pred_dBZ = pred.detach() * (maxv + eps)
+                    target_dBZ = yb.detach() * (maxv + eps)
                     
                     # Ensure both tensors have the same shape for metric computation
                     if pred_dBZ.shape != target_dBZ.shape:
@@ -293,39 +290,30 @@ def train_radar_model(
                     total_mse_sum += batch_mse
                     total_pixels += pred_dBZ.numel()
                     
-                    # Accumulate predictions for storm metrics (in chunks to manage memory)
-                    pred_chunks.append(pred_dBZ.cpu().numpy())
-                    target_chunks.append(target_dBZ.cpu().numpy())
-                    chunk_count += 1
+                    # Compute storm metrics for this batch using normalized data for consistency
+                    # Pass maxv and eps to ensure same normalization as training loss
+                    batch_metrics = compute_forecasting_metrics(
+                        pred.detach().cpu().numpy(), 
+                        yb.detach().cpu().numpy(),
+                        maxv=maxv, 
+                        eps=eps
+                    )
                     
-                    # Process chunks when we have enough or at the end
-                    if chunk_count >= chunk_size or chunk_count == len(dl):
-                        # Concatenate chunks
-                        pred_batch = np.concatenate(pred_chunks, axis=0)
-                        target_batch = np.concatenate(target_chunks, axis=0)
-                        
-                        # Compute storm metrics for this chunk
-                        chunk_metrics = compute_forecasting_metrics(pred_batch, target_batch)
-                        
-                        # Initialize or accumulate storm metrics
-                        if storm_metrics_sum is None:
-                            storm_metrics_sum = chunk_metrics
-                        else:
-                            for key in storm_metrics_sum:
-                                if key in chunk_metrics:
-                                    if isinstance(storm_metrics_sum[key], dict):
-                                        for subkey in storm_metrics_sum[key]:
-                                            if subkey in chunk_metrics[key]:
-                                                storm_metrics_sum[key][subkey] += chunk_metrics[key][subkey]
-                                    else:
-                                        storm_metrics_sum[key] += chunk_metrics[key]
-                        storm_metrics_count += 1
-                        
-                        # Clear chunks to free memory
-                        pred_chunks = []
-                        target_chunks = []
-                        chunk_count = 0
-        
+                    # Accumulate B-MSE from compute_forecasting_metrics
+                    total_b_mse += batch_metrics['b_mse'] * xb.size(0)
+                    total_samples += xb.size(0)
+                    
+                    # Accumulate CSI and HSS for this batch
+                    for th in total_csi:
+                        csi_key = f"csi_{th}"
+                        hss_key = f"hss_{th}"
+                        if csi_key in batch_metrics['csi_by_threshold']:
+                            total_csi[th] += batch_metrics['csi_by_threshold'][csi_key]
+                            total_hss[th] += batch_metrics['hss_by_threshold'][hss_key]
+                    
+                    total_csi_count += 1
+                    total_hss_count += 1
+            
         if not train:
             # Finalize MSE by dBZ bins
             final_mse_by_range = {}
@@ -340,14 +328,13 @@ def train_radar_model(
             
             # Finalize storm metrics
             final_storm_metrics = {}
-            if storm_metrics_count > 0:
-                for key in storm_metrics_sum:
-                    if isinstance(storm_metrics_sum[key], dict):
-                        final_storm_metrics[key] = {}
-                        for subkey in storm_metrics_sum[key]:
-                            final_storm_metrics[key][subkey] = storm_metrics_sum[key][subkey] / storm_metrics_count
-                    else:
-                        final_storm_metrics[key] = storm_metrics_sum[key] / storm_metrics_count
+            if total_samples > 0:
+                final_storm_metrics['b_mse'] = total_b_mse / total_samples
+                final_storm_metrics['csi_by_threshold'] = {}
+                final_storm_metrics['hss_by_threshold'] = {}
+                for th in total_csi:
+                    final_storm_metrics['csi_by_threshold'][f"csi_{th}"] = total_csi[th] / total_csi_count
+                    final_storm_metrics['hss_by_threshold'][f"hss_{th}"] = total_hss[th] / total_hss_count
             
             print("Validation metrics:")
             print(f"  B-MSE: {final_storm_metrics['b_mse']:.4f}")
