@@ -240,6 +240,10 @@ def train_radar_model(
             pred_chunks = []
             target_chunks = []
             chunk_count = 0
+            
+            # Initialize storm metrics accumulation
+            storm_metrics_sum = None
+            storm_metrics_count = 0
         
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
@@ -265,7 +269,7 @@ def train_radar_model(
                 
                 if not train:
                     # Convert to dBZ for metric computation
-                    maxv = 85.0
+                    maxv = 85.0 + 1e-6  # Use same maxv as b_mse_loss function
                     pred_dBZ = pred.detach() * maxv
                     target_dBZ = yb.detach() * maxv
                     
@@ -304,17 +308,18 @@ def train_radar_model(
                         chunk_metrics = compute_forecasting_metrics(pred_batch, target_batch)
                         
                         # Initialize or accumulate storm metrics
-                        if chunk_count == chunk_size:  # First chunk
-                            storm_metrics = chunk_metrics
-                        else:  # Accumulate metrics (simple averaging for now)
-                            for key in storm_metrics:
+                        if storm_metrics_sum is None:
+                            storm_metrics_sum = chunk_metrics
+                        else:
+                            for key in storm_metrics_sum:
                                 if key in chunk_metrics:
-                                    if isinstance(storm_metrics[key], dict):
-                                        for subkey in storm_metrics[key]:
+                                    if isinstance(storm_metrics_sum[key], dict):
+                                        for subkey in storm_metrics_sum[key]:
                                             if subkey in chunk_metrics[key]:
-                                                storm_metrics[key][subkey] = (storm_metrics[key][subkey] + chunk_metrics[key][subkey]) / 2
+                                                storm_metrics_sum[key][subkey] += chunk_metrics[key][subkey]
                                     else:
-                                        storm_metrics[key] = (storm_metrics[key] + chunk_metrics[key]) / 2
+                                        storm_metrics_sum[key] += chunk_metrics[key]
+                        storm_metrics_count += 1
                         
                         # Clear chunks to free memory
                         pred_chunks = []
@@ -333,29 +338,40 @@ def train_radar_model(
             # Finalize overall MSE
             final_mse = total_mse_sum / total_pixels if total_pixels > 0 else np.nan
             
+            # Finalize storm metrics
+            final_storm_metrics = {}
+            if storm_metrics_count > 0:
+                for key in storm_metrics_sum:
+                    if isinstance(storm_metrics_sum[key], dict):
+                        final_storm_metrics[key] = {}
+                        for subkey in storm_metrics_sum[key]:
+                            final_storm_metrics[key][subkey] = storm_metrics_sum[key][subkey] / storm_metrics_count
+                    else:
+                        final_storm_metrics[key] = storm_metrics_sum[key] / storm_metrics_count
+            
             print("Validation metrics:")
-            print(f"  B-MSE: {storm_metrics['b_mse']:.4f}")
-            for th, csi in storm_metrics['csi_by_threshold'].items():
+            print(f"  B-MSE: {final_storm_metrics['b_mse']:.4f}")
+            for th, csi in final_storm_metrics['csi_by_threshold'].items():
                 print(f"  CSI {th}: {csi:.4f}")
-            for th, hss in storm_metrics['hss_by_threshold'].items():
+            for th, hss in final_storm_metrics['hss_by_threshold'].items():
                 print(f"  HSS {th}: {hss:.4f}")
             print(f"  MSE: {final_mse:.4f}")
             for range_name, mse_val in final_mse_by_range.items():
                 print(f"  {range_name}: {mse_val:.4f}")
             
             if not args.no_wandb:
-                wandb.log({**{f"val_{k}": v for k, v in storm_metrics['csi_by_threshold'].items()},
-                           **{f"val_{k}": v for k, v in storm_metrics['hss_by_threshold'].items()},
-                           "val_b_mse": storm_metrics['b_mse'],
+                wandb.log({**{f"val_{k}": v for k, v in final_storm_metrics['csi_by_threshold'].items()},
+                           **{f"val_{k}": v for k, v in final_storm_metrics['hss_by_threshold'].items()},
+                           "val_b_mse": final_storm_metrics['b_mse'],
                            "val_mse": final_mse,
                            **{f"val_{k}": v for k, v in final_mse_by_range.items()}})
             
             # Store metrics for potential saving
             run_epoch.validation_metrics = {
-                "b_mse": storm_metrics['b_mse'],
+                "b_mse": final_storm_metrics['b_mse'],
                 "mse": final_mse,
-                "csi_by_threshold": storm_metrics['csi_by_threshold'],
-                "hss_by_threshold": storm_metrics['hss_by_threshold'],
+                "csi_by_threshold": final_storm_metrics['csi_by_threshold'],
+                "hss_by_threshold": final_storm_metrics['hss_by_threshold'],
                 "mse_by_range": final_mse_by_range
             }
         
