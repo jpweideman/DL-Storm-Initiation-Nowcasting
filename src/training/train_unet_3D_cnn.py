@@ -128,26 +128,26 @@ def train_radar_model(
     # DataLoaders
     if use_patches:
         patch_index_path = str(save_dir / "patch_indices.npy")
-        full_ds  = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
+        patch_ds = PatchRadarWindowDataset(cube, seq_len_in, seq_len_out, patch_size, patch_stride, patch_thresh, patch_frac, patch_index_path=patch_index_path, maxv=maxv)
         train_idx = []
-        val_idx = []
-        for i, (t, y, x) in enumerate(full_ds.patches):
+        for i, (t, y, x) in enumerate(patch_ds.patches):
             if t < n_train:
                 train_idx.append(i)
-            elif t < n_train + n_val:
-                val_idx.append(i)
-        train_ds = Subset(full_ds, train_idx)
-        val_ds   = Subset(full_ds, val_idx)
+        train_ds = Subset(patch_ds, train_idx)
         train_dl = DataLoader(train_ds, batch_size, shuffle=False)
-        val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
-        print(f"Patch-based: train={len(train_ds)}  val={len(val_ds)}")
+        
+        # Validation always use full frames 
+        full_ds = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
+        val_ds = Subset(full_ds, list(range(n_train, n_train + n_val)))
+        val_dl = DataLoader(val_ds, batch_size, shuffle=False)
+        print(f"Patch-based training: train_patches={len(train_ds)}, val_fullframes={len(val_ds)}")
     else:
         full_ds  = RadarWindowDataset(cube, seq_len_in, seq_len_out, maxv=maxv)
         train_ds = Subset(full_ds, list(range(0, n_train)))
         val_ds   = Subset(full_ds, list(range(n_train, n_train + n_val)))
         train_dl = DataLoader(train_ds, batch_size, shuffle=False)
         val_dl   = DataLoader(val_ds, batch_size, shuffle=False)
-        print(f"Samples  train={len(train_ds)}  val={len(val_ds)}")
+        print(f"Full-frame training: train={len(train_ds)}, val={len(val_ds)}")
 
     # model, optimizer, loss
     model     = UNet3DCNN(in_ch=C, out_ch=C, base_ch=base_ch, bottleneck_dims=bottleneck_dims, kernel=kernel_size, seq_len_out=seq_len_out).to(device)
@@ -221,9 +221,31 @@ def train_radar_model(
     def run_epoch(dl, train=True):
         model.train() if train else model.eval()
         tot=0.0
+        
+        if not train:
+            # Initialize running statistics for batch-by-batch metric computation
+            import numpy as np
+            from src.utils.storm_utils import compute_forecasting_metrics
+            
+            # For MSE by dBZ bins
+            ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
+            mse_by_range = {f"mse_{r_min}_{r_max}": {"sum": 0.0, "count": 0} for r_min, r_max in ranges}
+            
+            # For overall MSE
+            total_mse_sum = 0.0
+            total_pixels = 0
+            
+            # For batch-by-batch metrics (B-MSE, CSI, HSS)
+            total_b_mse = 0.0
+            total_samples = 0
+            total_csi = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
+            total_hss = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
+            total_csi_count = 0
+            total_hss_count = 0
+        
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
-                if use_patches:
+                if use_patches and train:  # Only training uses patches 
                     xb, yb = batch[0], batch[1]
                 else:
                     xb, yb = batch
@@ -242,6 +264,104 @@ def train_radar_model(
                 if train:
                     optimizer.zero_grad(); loss.backward(); optimizer.step()
                 tot += loss.item()*xb.size(0)
+                
+                if not train:
+                    # Convert to dBZ for metric computation
+                    pred_dBZ = pred.detach() * (maxv + eps)
+                    target_dBZ = yb.detach() * (maxv + eps)
+                    
+                    # Ensure both tensors have the same shape for metric computation
+                    if pred_dBZ.shape != target_dBZ.shape:
+                        # Remove singleton dimensions to match shapes
+                        pred_dBZ = pred_dBZ.squeeze()
+                        target_dBZ = target_dBZ.squeeze()
+                    
+                    # Compute MSE by dBZ bins batch by batch
+                    for r_min, r_max in ranges:
+                        mask = (target_dBZ >= r_min) & (target_dBZ < r_max)
+                        n_pix = torch.sum(mask).item()
+                        if n_pix > 0:
+                            mse_bin = torch.sum(((pred_dBZ[mask] - target_dBZ[mask]) ** 2)).item()
+                            mse_by_range[f"mse_{r_min}_{r_max}"]["sum"] += mse_bin
+                            mse_by_range[f"mse_{r_min}_{r_max}"]["count"] += n_pix
+                    
+                    # Compute overall MSE
+                    batch_mse = torch.sum(((pred_dBZ - target_dBZ) ** 2)).item()
+                    total_mse_sum += batch_mse
+                    total_pixels += pred_dBZ.numel()
+                    
+                    # Compute storm metrics for this batch using normalized data for consistency
+                    # Pass maxv and eps to ensure same normalization as training loss
+                    batch_metrics = compute_forecasting_metrics(
+                        pred.detach().cpu().numpy(), 
+                        yb.detach().cpu().numpy(),
+                        maxv=maxv, 
+                        eps=eps
+                    )
+                    
+                    # Accumulate B-MSE from compute_forecasting_metrics
+                    total_b_mse += batch_metrics['b_mse'] * xb.size(0)
+                    total_samples += xb.size(0)
+                    
+                    # Accumulate CSI and HSS for this batch
+                    for th in total_csi:
+                        csi_key = f"csi_{th}"
+                        hss_key = f"hss_{th}"
+                        if csi_key in batch_metrics['csi_by_threshold']:
+                            total_csi[th] += batch_metrics['csi_by_threshold'][csi_key]
+                            total_hss[th] += batch_metrics['hss_by_threshold'][hss_key]
+                    
+                    total_csi_count += 1
+                    total_hss_count += 1
+            
+        if not train:
+            # Finalize MSE by dBZ bins
+            final_mse_by_range = {}
+            for range_name, stats in mse_by_range.items():
+                if stats["count"] > 0:
+                    final_mse_by_range[range_name] = stats["sum"] / stats["count"]
+                else:
+                    final_mse_by_range[range_name] = np.nan
+            
+            # Finalize overall MSE
+            final_mse = total_mse_sum / total_pixels if total_pixels > 0 else np.nan
+            
+            # Finalize storm metrics
+            final_storm_metrics = {}
+            if total_samples > 0:
+                final_storm_metrics['b_mse'] = total_b_mse / total_samples
+                final_storm_metrics['csi_by_threshold'] = {}
+                final_storm_metrics['hss_by_threshold'] = {}
+                for th in total_csi:
+                    final_storm_metrics['csi_by_threshold'][f"csi_{th}"] = total_csi[th] / total_csi_count
+                    final_storm_metrics['hss_by_threshold'][f"hss_{th}"] = total_hss[th] / total_hss_count
+            
+            print("Validation metrics:")
+            print(f"  B-MSE: {final_storm_metrics['b_mse']:.4f}")
+            for th, csi in final_storm_metrics['csi_by_threshold'].items():
+                print(f"  CSI {th}: {csi:.4f}")
+            for th, hss in final_storm_metrics['hss_by_threshold'].items():
+                print(f"  HSS {th}: {hss:.4f}")
+            print(f"  MSE: {final_mse:.4f}")
+            for range_name, mse_val in final_mse_by_range.items():
+                print(f"  {range_name}: {mse_val:.4f}")
+            
+            if not args.no_wandb:
+                wandb.log({**{f"val_{k}": v for k, v in final_storm_metrics['csi_by_threshold'].items()},
+                           **{f"val_{k}": v for k, v in final_storm_metrics['hss_by_threshold'].items()},
+                           "val_b_mse": final_storm_metrics['b_mse'],
+                           "val_mse": final_mse,
+                           **{f"val_{k}": v for k, v in final_mse_by_range.items()}})
+            
+            # Store metrics for potential saving
+            run_epoch.validation_metrics = {
+                "b_mse": final_storm_metrics['b_mse'],
+                "mse": final_mse,
+                "csi_by_threshold": final_storm_metrics['csi_by_threshold'],
+                "hss_by_threshold": final_storm_metrics['hss_by_threshold'],
+                "mse_by_range": final_mse_by_range
+            }
+        
         return tot/len(dl.dataset)
 
     for ep in range(start_ep, end_epoch+1):
@@ -260,6 +380,20 @@ def train_radar_model(
             if not args.no_wandb:
                 wandb.log({'best_val_loss':best_val})
             epochs_since_improvement = 0
+            
+            # Save validation metrics to JSON when new best is achieved
+            if hasattr(run_epoch, 'validation_metrics'):
+                import json
+                results_dir = save_dir / "results"
+                results_dir.mkdir(exist_ok=True)
+                metrics_to_save = {
+                    "epoch": ep,
+                    "val_loss": vl,
+                    **run_epoch.validation_metrics
+                }
+                with open(results_dir / "best_validation_metrics.json", "w") as f:
+                    json.dump(metrics_to_save, f, indent=2)
+                print(f"Validation metrics saved to {results_dir}/best_validation_metrics.json")
         else:
             epochs_since_improvement += 1
         # Only apply early stopping if patience > 0

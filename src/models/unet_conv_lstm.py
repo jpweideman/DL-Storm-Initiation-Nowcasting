@@ -98,36 +98,52 @@ class ConvLSTMCell(nn.Module):
     """
     ConvLSTM Cell for spatiotemporal processing.
     
-    A single ConvLSTM cell that applies LSTM operations with convolutional gates.
-    Processes spatial data while maintaining temporal memory through LSTM mechanisms.
+    A single ConvLSTM cell that processes spatial features with temporal gating.
+    Combines spatial convolutions with LSTM-style gating mechanisms.
 
     Parameters
     ----------
-    in_ch : int
+    input_channels : int
         Number of input channels.
-    hid_ch : int
+    hidden_channels : int
         Number of hidden channels.
-    kernel : int, optional
+    kernel_size : int, optional
         Kernel size for convolutions (default: 3).
     """
-    def __init__(self, in_ch, hid_ch, kernel=3):
+    def __init__(self, input_channels, hidden_channels, kernel_size=3):
         super().__init__()
-        p = kernel // 2
-        self.hid_ch = hid_ch
-        self.conv = nn.Conv2d(in_ch + hid_ch, 4 * hid_ch, kernel, padding=p)
+        self.input_channels = input_channels
+        self.hidden_channels = hidden_channels
+        self.kernel_size = kernel_size
+        padding = kernel_size // 2
+        
+        # Input to hidden (i2h) - input gate, forget gate, cell gate, output gate
+        self.i2h = nn.Conv2d(input_channels, hidden_channels * 4, kernel_size, padding=padding)
+        
+        # Hidden to hidden (h2h) - input gate, forget gate, cell gate, output gate
+        self.h2h = nn.Conv2d(hidden_channels, hidden_channels * 4, kernel_size, padding=padding)
 
-    def forward(self, x, h, c):
-        gates = self.conv(torch.cat([x, h], dim=1))
-        i, f, o, g = gates.chunk(4, dim=1)
-        i, f, o = torch.sigmoid(i), torch.sigmoid(f), torch.sigmoid(o)
-        g = torch.tanh(g)
-        c_next = f * c + i * g
-        h_next = o * torch.tanh(c_next)
-        return h_next, c_next
-
-    def init_hidden(self, B, H, W, device):
-        h = torch.zeros(B, self.hid_ch, H, W, device=device)
-        return h, h.clone()
+    def forward(self, x, h_prev, c_prev):
+        # x: (B, C, H, W), h_prev: (B, H, H, W), c_prev: (B, H, H, W)
+        
+        # Gates computation
+        i2h = self.i2h(x)
+        h2h = self.h2h(h_prev)
+        
+        # Split gates
+        gates = i2h + h2h
+        gates = torch.split(gates, self.hidden_channels, dim=1)
+        
+        input_gate = torch.sigmoid(gates[0])
+        forget_gate = torch.sigmoid(gates[1])
+        cell_gate = torch.tanh(gates[2])
+        output_gate = torch.sigmoid(gates[3])
+        
+        # LSTM update
+        c_new = forget_gate * c_prev + input_gate * cell_gate
+        h_new = output_gate * torch.tanh(c_new)
+        
+        return h_new, c_new
 
 
 class UNetConvLSTM(nn.Module):
@@ -146,7 +162,7 @@ class UNetConvLSTM(nn.Module):
         Number of output channels.
     base_ch : int, optional
         Number of channels in the first encoder layer (default: 32).
-    lstm_hid : int or tuple/list of int, optional
+    hidden_dims : int or tuple/list of int, optional
         Number of hidden channels in the ConvLSTM bottleneck (default: 64).
         If a tuple/list, multiple ConvLSTM layers are stacked.
         **Each entry corresponds to a single ConvLSTMCell (not a double block).**
@@ -156,28 +172,31 @@ class UNetConvLSTM(nn.Module):
     kernel : int, optional
         Convolution kernel size for all convolutions (must be odd) (default: 3).
     """
-    def __init__(self, in_ch, out_ch, base_ch=32, lstm_hid=64, seq_len=10, kernel=3):
+    def __init__(self, in_ch, out_ch, base_ch=32, hidden_dims=64, seq_len=10, kernel=3):
         super().__init__()
         self.seq_len = seq_len
         self.kernel = kernel
-        # Encoder
+        
+        # Encoder 
         self.inc = DoubleConv(in_ch, base_ch, kernel)
         self.down1 = Down(base_ch, base_ch*2, kernel)
         self.down2 = Down(base_ch*2, base_ch*4, kernel)
-        # Bottleneck ConvLSTM (support multiple layers if lstm_hid is tuple/list)
-        if isinstance(lstm_hid, (tuple, list)):
-            self.lstm_layers = nn.ModuleList()
+        
+        # Bottleneck ConvLSTM (support multiple layers if hidden_dims is tuple/list)
+        if isinstance(hidden_dims, (tuple, list)):
+            self.convlstm_layers = nn.ModuleList()
             in_dim = base_ch*4
-            for hid in lstm_hid:
-                self.lstm_layers.append(ConvLSTMCell(in_dim, hid, kernel))
+            for hid in hidden_dims:
+                self.convlstm_layers.append(ConvLSTMCell(in_dim, hid, kernel))
                 in_dim = hid
-            self.lstm_out_dim = lstm_hid[-1]
+            self.convlstm_out_dim = hidden_dims[-1]
         else:
-            self.lstm_layers = None
-            self.lstm_cell = ConvLSTMCell(base_ch*4, lstm_hid, kernel)
-            self.lstm_out_dim = lstm_hid
+            self.convlstm_layers = None
+            self.convlstm_cell = ConvLSTMCell(base_ch*4, hidden_dims, kernel)
+            self.convlstm_out_dim = hidden_dims
+        
         # Decoder
-        self.up1 = Up(self.lstm_out_dim, base_ch*4, base_ch*2, kernel)  
+        self.up1 = Up(self.convlstm_out_dim, base_ch*4, base_ch*2, kernel)  
         self.up2 = Up(base_ch*2, base_ch, base_ch, kernel)
         self.outc = nn.Conv2d(base_ch, out_ch, 1)
 
@@ -186,44 +205,48 @@ class UNetConvLSTM(nn.Module):
         B, S, C, H, W = x.shape
         device = x.device
         
-        # Process each time step through the encoder
+        # Process each time step through the encoder and accumulate features
         encoded_features = []
         for t in range(S):
             xt = x[:, t]  # (B, C, H, W)
             x1 = self.inc(xt)
             x2 = self.down1(x1)
             x3 = self.down2(x2)
-            encoded_features.append((x1, x2, x3))  # Store all intermediate features
+            encoded_features.append((x1, x2, x3))  # Store all features for skip connections
         
-        # Stack encoded features along time dimension
         encoded_stack = torch.stack([feat[2] for feat in encoded_features], dim=1)  # (B, S, base_ch*4, H//4, W//4)
         
         # Process through ConvLSTM bottleneck
-        if self.lstm_layers is not None:
+        if self.convlstm_layers is not None:
             # Multiple ConvLSTM layers
             h_list = []
             c_list = []
-            for cell in self.lstm_layers:
-                h, c = cell.init_hidden(B, H//4, W//4, device)
+            for cell in self.convlstm_layers:
+                h = torch.zeros(B, cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
+                c = torch.zeros(B, cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
                 h_list.append(h)
                 c_list.append(c)
             
+            # Process temporal sequence through ConvLSTM layers
             for t in range(S):
                 xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
-                for i, cell in enumerate(self.lstm_layers):
+                for i, cell in enumerate(self.convlstm_layers):
                     h_list[i], c_list[i] = cell(xt, h_list[i], c_list[i])
                     xt = h_list[i]  # Feed output of current layer to next layer
             bottleneck_out = h_list[-1]  # Use output from last layer
         else:
             # Single ConvLSTM layer
-            h, c = self.lstm_cell.init_hidden(B, H//4, W//4, device)
+            h = torch.zeros(B, self.convlstm_cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
+            c = torch.zeros(B, self.convlstm_cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
+            
+            # Process temporal sequence through single ConvLSTM
             for t in range(S):
                 xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
-                h, c = self.lstm_cell(xt, h, c)
+                h, c = self.convlstm_cell(xt, h, c)
             bottleneck_out = h
         
-        # Decoder
-        x = self.up1(bottleneck_out, encoded_features[-1][2])  # Use last encoded features (x3) for skip connection
-        x = self.up2(x, encoded_features[0][0])  # Use first encoded features (x1) for skip connection
+        # Decoder 
+        x = self.up1(bottleneck_out, encoded_features[-1][2])  # Use last time step's x3 (base_ch*4)
+        x = self.up2(x, encoded_features[-1][0])  # Use last time step's x1 (base_ch)
         x = self.outc(x)
         return x 

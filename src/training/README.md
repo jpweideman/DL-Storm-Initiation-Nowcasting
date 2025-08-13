@@ -33,6 +33,7 @@ python src/training/train_unet_3D_cnn.py train \
 ```
 
 - All arguments used for the run are saved as `args.json` in the run directory for reproducibility.
+- Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/best_validation_metrics.json` whenever a new best validation score is achieved.
 - Add `--no_wandb` to disable Weights & Biases logging.
 - To use [Weights & Biases](https://wandb.ai/) logging, add `--wandb_project "your-project-name"` to your command. This will log training metrics, model parameters, and enable experiment tracking.
 
@@ -93,6 +94,7 @@ Patch-based training is highly recommended for radar nowcasting of storm initiat
 - **Checkpoints**: Saved in the run directory.
 - **Arguments**: Saved as `{train/test}_args.json` in the run directory.
 - **Results**: Results saved in `results/` inside the run directory.
+- **Validation Metrics**: Automatically saved to `results/best_validation_metrics.json` when new best validation scores are achieved.
 - **Predictions**: Large data arrays from testing can be saved in a separate directory using `--predictions_dir`.
 
 See the main [README.md](../../README.md) for the full pipeline. 

@@ -26,9 +26,9 @@ def conv3d_block(in_ch, out_ch, kernel_size=3, stride=1, padding=1):
     )
 
 
-class Radar3DCNN(nn.Module):
+class CNN3D(nn.Module):
     """
-    Simple 3D CNN for spatiotemporal radar forecasting.
+    Simple 3D CNN for spatiotemporal forecasting.
 
     Parameters
     ----------

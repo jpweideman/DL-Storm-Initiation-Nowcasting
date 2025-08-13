@@ -52,7 +52,7 @@ def compute_csi_hss(pred, target, threshold):
     
     return CSI, HSS
 
-def compute_b_mse(pred, target):
+def compute_b_mse(pred, target, maxv=85.0, eps=1e-6):
     """
     Compute B-MSE (Balanced Mean Squared Error) using the same weighting scheme as in training.
     
@@ -62,14 +62,24 @@ def compute_b_mse(pred, target):
         Predicted values in dBZ.
     target : np.ndarray
         Ground truth values in dBZ.
+    maxv : float, optional
+        Maximum value for normalization (default: 85.0).
+    eps : float, optional
+        Small epsilon to avoid division by zero (default: 1e-6).
     
     Returns
     -------
     float
         B-MSE value.
     """
-    # Compute weights based on dBZ values directly
-    w = np.ones_like(target)
+    # If pred and target are in normalized scale (0-1), convert to dBZ
+    if pred.max() <= 1.0 and target.max() <= 1.0:
+        pred = pred * (maxv + eps)
+        target = target * (maxv + eps)
+    
+    # Compute weights based on dBZ values directly 
+    w = np.ones_like(target, dtype=np.float32)  
+
     w = np.where(target < 2, 1.0, w)
     w = np.where((target >= 2) & (target < 5), 2.0, w)
     w = np.where((target >= 5) & (target < 10), 5.0, w)
@@ -77,11 +87,11 @@ def compute_b_mse(pred, target):
     w = np.where((target >= 30) & (target < 45), 30.0, w)
     w = np.where(target >= 45, 45.0, w)
     
-    # B-MSE: normalize by total number of pixels, not sum of weights
+    # B-MSE: normalize by total number of pixels
     b_mse = np.mean(w * (pred - target) ** 2)
     return b_mse
 
-def compute_forecasting_metrics(pred, target):
+def compute_forecasting_metrics(pred, target, maxv=85.0, eps=1e-6):
     """
     Compute comprehensive forecasting metrics including CSI, HSS, and B-MSE.
     
@@ -91,6 +101,10 @@ def compute_forecasting_metrics(pred, target):
         Predicted values in dBZ.
     target : np.ndarray
         Ground truth values in dBZ.
+    maxv : float, optional
+        Maximum value for normalization (default: 85.0).
+    eps : float, optional
+        Small epsilon to avoid division by zero (default: 1e-6).
     
     Returns
     -------
@@ -100,16 +114,23 @@ def compute_forecasting_metrics(pred, target):
         - 'csi_by_threshold': CSI scores for thresholds [2, 5, 10, 30, 45] dBZ
         - 'hss_by_threshold': HSS scores for thresholds [2, 5, 10, 30, 45] dBZ
     """
-    # Compute B-MSE
-    b_mse_value = compute_b_mse(pred, target)
+    # Convert to dBZ if needed 
+    pred_dBZ = pred.copy()
+    target_dBZ = target.copy()
+    if pred.max() <= 1.0 and target.max() <= 1.0:
+        pred_dBZ = pred * (maxv + eps)
+        target_dBZ = target * (maxv + eps)
     
-    # Compute CSI and HSS for different thresholds
+    # Compute B-MSE
+    b_mse_value = compute_b_mse(pred, target, maxv=maxv, eps=eps)
+    
+    # Compute CSI and HSS for different thresholds using dBZ values
     thresholds = [2, 5, 10, 30, 45]
     csi_by_threshold = {}
     hss_by_threshold = {}
     
     for th in thresholds:
-        csi, hss = compute_csi_hss(pred, target, th)
+        csi, hss = compute_csi_hss(pred_dBZ, target_dBZ, th)
         csi_by_threshold[f"csi_{th}"] = float(csi)  
         hss_by_threshold[f"hss_{th}"] = float(hss)  
     
@@ -1324,7 +1345,7 @@ if __name__ == "__main__":
     storm_results = evaluate_new_storm_predictions(pred_storms, tgt_storms, overlap_threshold=args.overlap_threshold)
     
     # Compute forecasting metrics (CSI, HSS, B-MSE)
-    forecasting_metrics = compute_forecasting_metrics(pred_cappi, tgt_cappi)
+    forecasting_metrics = compute_forecasting_metrics(pred_cappi, tgt_cappi, maxv=args.maxv, eps=1e-6)
     
     # Combine results
     results = {
