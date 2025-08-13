@@ -226,6 +226,7 @@ class UNetTrajGRU(nn.Module):
         self.inc = DoubleConv(in_ch, base_ch, kernel)
         self.down1 = Down(base_ch, base_ch*2, kernel)
         self.down2 = Down(base_ch*2, base_ch*4, kernel)
+        
         # Bottleneck TrajGRU (support multiple layers if trajgru_hid is tuple/list)
         if isinstance(trajgru_hid, (tuple, list)):
             self.trajgru_layers = nn.ModuleList()
@@ -242,6 +243,7 @@ class UNetTrajGRU(nn.Module):
             self.trajgru_layers = None
             self.trajgru_cell = TrajGRUCell(base_ch*4, trajgru_hid, kernel, L)
             self.trajgru_out_dim = trajgru_hid
+        
         # Decoder
         self.up1 = Up(self.trajgru_out_dim, base_ch*4, base_ch*2, kernel)  
         self.up2 = Up(base_ch*2, base_ch, base_ch, kernel)
@@ -252,14 +254,15 @@ class UNetTrajGRU(nn.Module):
         B, S, C, H, W = x.shape
         device = x.device
         
-        # Process each time step through the encoder
+        # Process each time step through the encoder and accumulate features
+        # Store all encoder features for skip connections
         encoded_features = []
         for t in range(S):
             xt = x[:, t]  # (B, C, H, W)
             x1 = self.inc(xt)
             x2 = self.down1(x1)
             x3 = self.down2(x2)
-            encoded_features.append((x1, x2, x3))  # Store all intermediate features
+            encoded_features.append((x1, x2, x3))  # Store all features for skip connections
         
         # Stack encoded features along time dimension
         encoded_stack = torch.stack([feat[2] for feat in encoded_features], dim=1)  # (B, S, base_ch*4, H//4, W//4)
@@ -272,6 +275,7 @@ class UNetTrajGRU(nn.Module):
                 h = torch.zeros(B, cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
                 h_list.append(h)
             
+            # Process temporal sequence through TrajGRU layers
             for t in range(S):
                 xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
                 for i, cell in enumerate(self.trajgru_layers):
@@ -286,8 +290,8 @@ class UNetTrajGRU(nn.Module):
                 h = self.trajgru_cell(xt, h)
             bottleneck_out = h
         
-        # Decoder
-        x = self.up1(bottleneck_out, encoded_features[-1][2])  # Use last encoded features (x3) for skip connection
-        x = self.up2(x, encoded_features[0][0])  # Use first encoded features (x1) for skip connection
+        # Decoder with skip connections
+        x = self.up1(bottleneck_out, encoded_features[-1][2])  # Use last time step's x3 (base_ch*4)
+        x = self.up2(x, encoded_features[-1][0])  # Use last time step's x1 (base_ch)
         x = self.outc(x)
         return x 

@@ -634,7 +634,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--patch_stride", type=int, default=32, help="Stride for patch extraction (default: 32)")
     train_parser.add_argument("--patch_thresh", type=float, default=35.0, help="Threshold in dBZ for extracting patches (default: 35.0 dBZ)")
     train_parser.add_argument("--patch_frac", type=float, default=0.01, help="Minimum fraction of pixels in patch above threshold (default: 0.01)")
-    train_parser.add_argument("--use_patches", type=str, default="True", help="Whether to use patch-based training: True or False (default: True)")
+    train_parser.add_argument("--use_patches", type=str, default="False", help="Whether to use patch-based training: True or False (default: False)")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
     train_parser.add_argument("--no_wandb", action="store_true", help="Disable wandb logging")
     train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")

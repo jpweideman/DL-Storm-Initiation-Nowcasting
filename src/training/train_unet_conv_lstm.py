@@ -44,7 +44,7 @@ def train_radar_model(
     patch_frac: float = 0.01,
     use_patches: bool = False,
     base_ch: int = 32,
-    lstm_hid: int = 64,
+    hidden_dims: int = 64,
     wandb_project: str = "radar-forecasting",
     early_stopping_patience: int = 10,
 ):
@@ -93,7 +93,7 @@ def train_radar_model(
         Whether to use patch-based training (default: False).
     base_ch : int, optional
         Base number of channels for U-Net (default: 32).
-    lstm_hid : int or tuple/list of int, optional
+    hidden_dims : int or tuple/list of int, optional
         Number of hidden channels in the ConvLSTM bottleneck (default: 64).
         If a tuple or list is provided, multiple ConvLSTM layers are stacked in the bottleneck,
         with each value specifying the hidden size of each layer.
@@ -160,7 +160,7 @@ def train_radar_model(
         in_ch=C,
         out_ch=C,
         base_ch=base_ch,
-        lstm_hid=lstm_hid,
+        hidden_dims=hidden_dims,
         seq_len=seq_len_in,
         kernel=kernel
     ).to(device)
@@ -223,7 +223,7 @@ def train_radar_model(
                 'patch_frac': patch_frac,
                 'use_patches': use_patches,
                 'base_ch': base_ch,
-                'lstm_hid': lstm_hid,
+                'hidden_dims': hidden_dims,
                 'wandb_project': wandb_project,
                 'early_stopping_patience': early_stopping_patience
             }
@@ -424,7 +424,7 @@ def predict_test_set(
     device: str = None,
     save_arrays: bool = True,
     base_ch: int = 32,
-    lstm_hid: int = 64,
+    hidden_dims: int = 64,
     predictions_dir: str = None,
 ):
     """
@@ -457,7 +457,7 @@ def predict_test_set(
         If None, files are saved in run_dir. If specified, creates the directory if it doesn't exist.
     base_ch : int, optional
         Base number of channels for U-Net (default: 32).
-    lstm_hid : int or tuple/list of int, optional
+    hidden_dims : int or tuple/list of int, optional
         Number of hidden channels in the ConvLSTM bottleneck (default: 64).
         If a tuple or list is provided, multiple ConvLSTM layers are stacked in the bottleneck,
         with each value specifying the hidden size of each layer.
@@ -498,7 +498,7 @@ def predict_test_set(
         in_ch=C,
         out_ch=C,
         base_ch=base_ch,
-        lstm_hid=lstm_hid,
+        hidden_dims=hidden_dims,
         seq_len=seq_len_in,
         kernel=kernel
     )
@@ -603,7 +603,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--patch_frac", type=float, default=0.01, help="Minimum fraction of pixels in patch above threshold (default: 0.01)")
     train_parser.add_argument("--use_patches", type=str, default="False", help="Whether to use patch-based training: True or False (default: False)")
     train_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net (default: 32)")
-    train_parser.add_argument("--lstm_hid", type=str, default="64", help="Number of hidden channels in the ConvLSTM bottleneck (int or tuple/list, e.g., 64 or (64,128))")
+    train_parser.add_argument("--hidden_dims", type=str, default="64", help="Number of hidden channels in the ConvLSTM bottleneck (int or tuple/list, e.g., 64 or (64,128))")
     train_parser.add_argument("--wandb_project", type=str, default="radar-forecasting", help="wandb project name")
     train_parser.add_argument("--no_wandb", action="store_true", help="Disable wandb logging")
     train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")
@@ -621,7 +621,7 @@ if __name__ == "__main__":
     test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
     test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
     test_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
-    test_parser.add_argument("--lstm_hid", type=str, default="64", help="ConvLSTM hidden dims as int or tuple, e.g., 64 or (64,128)")
+    test_parser.add_argument("--hidden_dims", type=str, default="64", help="ConvLSTM hidden dims as int or tuple, e.g., 64 or (64,128)")
     test_parser.add_argument("--predictions_dir", type=str, default=None, help="Directory to save large prediction/target files (default: same as run_dir)")
 
     args = parser.parse_args()
@@ -642,12 +642,12 @@ if __name__ == "__main__":
                 raise ValueError("--use_patches must be True or False")
         try:
             train_val_test_split = ast.literal_eval(args.train_val_test_split)
-            if isinstance(args.lstm_hid, str):
-                lstm_hid = ast.literal_eval(args.lstm_hid)
+            if isinstance(args.hidden_dims, str):
+                hidden_dims = ast.literal_eval(args.hidden_dims)
             else:
-                lstm_hid = args.lstm_hid
+                hidden_dims = args.hidden_dims
         except Exception:
-            raise ValueError("lstm_hid must be an int or tuple/list, like 64 or (64,128)")
+            raise ValueError("hidden_dims must be an int or tuple/list, like 64 or (64,128)")
 
         if args.kernel % 2 == 0:
             raise ValueError("kernel must be an odd integer.")
@@ -673,7 +673,7 @@ if __name__ == "__main__":
             patch_frac=args.patch_frac,
             use_patches=args.use_patches,
             base_ch=args.base_ch,
-            lstm_hid=lstm_hid,
+            hidden_dims=hidden_dims,
             wandb_project=args.wandb_project,
             early_stopping_patience=args.early_stopping_patience,
         )
@@ -684,12 +684,12 @@ if __name__ == "__main__":
         with open(os.path.join(args.run_dir, "test_args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
         try:
-            if isinstance(args.lstm_hid, str):
-                lstm_hid = ast.literal_eval(args.lstm_hid)
+            if isinstance(args.hidden_dims, str):
+                hidden_dims = ast.literal_eval(args.hidden_dims)
             else:
-                lstm_hid = args.lstm_hid
+                hidden_dims = args.hidden_dims
         except Exception:
-            raise ValueError("lstm_hid must be an int or tuple/list, like 64 or (64,128)")
+            raise ValueError("hidden_dims must be an int or tuple/list, like 64 or (64,128)")
         predict_test_set(
             npy_path=args.npy_path,
             run_dir=args.run_dir,
@@ -702,6 +702,6 @@ if __name__ == "__main__":
             device=args.device,
             save_arrays=args.save_arrays,
             base_ch=args.base_ch,
-            lstm_hid=lstm_hid,
+            hidden_dims=hidden_dims,
             predictions_dir=args.predictions_dir,
         )
