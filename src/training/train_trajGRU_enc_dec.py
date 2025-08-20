@@ -15,7 +15,7 @@ from tqdm import tqdm
 import ast
 import json
 
-from src.models.traj_gru_baseline import TrajGRUEncoderDecoder
+from old_scripts.traj_gru_enc_dec import TrajGRUEncoderDecoder
 # Import utilities
 from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss, b_mse_loss
 # Import dataloaders
@@ -666,7 +666,7 @@ def predict_test_set(
     return None
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train or test a symmetric TrajGRU encoder-forecaster model (no U-Net, no skip connections).\n\nSpecify architecture using comma-separated lists for each argument. Example:\n\n--hidden_channels 64,192,192 --kernel_size 3,3,3 --L 13,13,9 --conv_kernels 5,5,3 --conv_strides 3,2,1\n\nThis will create a 3-layer encoder and 3-layer decoder, with decoder using reversed parameters.\n\n⚠️  IMPORTANT: Large strides (>3) can cause blank predictions due to excessive information loss. Use smaller strides for better results.")
+    parser = argparse.ArgumentParser(description="Train or test a symmetric TrajGRU encoder-decoder model (no U-Net, no skip connections).\n\nSpecify architecture using comma-separated lists for each argument. Example:\n\n--hidden_channels 64,192,192 --kernel_size 3,3,3 --L 13,13,9 --conv_kernels 5,5,3 --conv_strides 3,2,1\n\nThis will create a 3-layer encoder and 3-layer decoder, with decoder using reversed parameters.\n\n  IMPORTANT: Large strides (>3) can cause blank predictions due to excessive information loss. Use smaller strides for better results.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # Train subparser

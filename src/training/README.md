@@ -6,7 +6,7 @@ This folder contains scripts for training and evaluating different deep learning
 
 - **train_conv_lstm.py** — Train a ConvLSTM model.
 - **train_trajGRU.py** — Train a Trajectory GRU model.
-- **train_trajGRU_baseline.py** — Train a symmetric TrajGRU encoder-decoder model (no U-Net, no skip connections).
+- **train_trajGRU_enc_dec.py** — Train a symmetric TrajGRU encoder-decoder model (no U-Net, no skip connections).
 - **train_3D_cnn.py** — Train a 3D CNN model.
 - **train_unet_3D_cnn.py** — Train a U-Net 3D CNN model.
 - **train_unet_conv_lstm.py** — Train a U-Net ConvLSTM model.

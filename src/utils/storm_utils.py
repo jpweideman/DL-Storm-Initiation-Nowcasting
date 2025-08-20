@@ -873,9 +873,9 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     Parameters
     ----------
     new_storms_pred : list
-        List of dicts from detect_new_storm_formations(pred_max_cappi).
+        List of dicts from detect_new_storm_formations(pred_composite_reflectivity).
     new_storms_true : list
-        List of dicts from detect_new_storm_formations(true_max_cappi).
+        List of dicts from detect_new_storm_formations(true_composite_reflectivity).
     overlap_threshold : float, optional
         Minimum overlap ratio to count as a match (default: 0.2).
 
@@ -1179,7 +1179,7 @@ if __name__ == "__main__":
         description="""
         Evaluate new storm predictions from .npy files and save results.
         This script loads prediction and target arrays (N, C, H, W),
-        reduces them to (T, H, W) by taking the max over the channel dimension (axis=1, max CAPPI),
+        reduces them to (T, H, W) by taking the max over the channel dimension (axis=1, composite reflectivity),
         then runs detect_new_storm_formations and evaluate_new_storm_predictions.
         Results are printed and saved as JSON.
         """
@@ -1233,15 +1233,15 @@ if __name__ == "__main__":
     tgt = load_memmap_with_meta(args.targets)
 
     # Always reduce to (T, H, W) by taking max over channel dimension if present
-    # This is refered to as CAPPI (Constant Altitude Plan Position Indicator)
+    # Composite Reflectivity (Maximum Intensity Projection over altitude)
     # If input is (N, C, H, W), take max over axis=1
     # If input is already (N, H, W), do nothing
     if pred.ndim == 4:
-        pred_cappi = np.max(pred, axis=1)
-        tgt_cappi = np.max(tgt, axis=1)
+        pred_composite = np.max(pred, axis=1)
+        tgt_composite = np.max(tgt, axis=1)
     elif pred.ndim == 3:
-        pred_cappi = pred
-        tgt_cappi = tgt
+        pred_composite = pred
+        tgt_composite = tgt
     else:
         raise ValueError("Input arrays must be of shape (N, C, H, W) or (N, H, W)")
 
@@ -1283,7 +1283,7 @@ if __name__ == "__main__":
     
     if use_displacement_prediction:
         pred_result = detect_with_progress(
-            pred_cappi,
+            pred_composite,
             reflectivity_threshold=args.reflectivity_threshold,
             area_threshold_km2=args.area_threshold_km2,
             dilation_iterations=args.dilation_iterations,
@@ -1298,7 +1298,7 @@ if __name__ == "__main__":
             desc='Pred storms')
     else:
         pred_result = detect_with_progress(
-            pred_cappi,
+            pred_composite,
             reflectivity_threshold=args.reflectivity_threshold,
             area_threshold_km2=args.area_threshold_km2,
             dilation_iterations=args.dilation_iterations,
@@ -1309,7 +1309,7 @@ if __name__ == "__main__":
     
     if use_displacement_prediction:
         tgt_result = detect_with_progress(
-            tgt_cappi,
+            tgt_composite,
             reflectivity_threshold=args.reflectivity_threshold,
             area_threshold_km2=args.area_threshold_km2,
             dilation_iterations=args.dilation_iterations,
@@ -1324,7 +1324,7 @@ if __name__ == "__main__":
             desc='True storms')
     else:
         tgt_result = detect_with_progress(
-            tgt_cappi,
+            tgt_composite,
             reflectivity_threshold=args.reflectivity_threshold,
             area_threshold_km2=args.area_threshold_km2,
             dilation_iterations=args.dilation_iterations,
@@ -1334,7 +1334,7 @@ if __name__ == "__main__":
             desc='True storms')
 
     # Handle different return types based on displacement prediction setting
-    if use_displacement_prediction and len(pred_cappi) > 1:
+    if use_displacement_prediction and len(pred_composite) > 1:
         pred_storms, pred_displacement_fields, pred_patch_centers = pred_result
         tgt_storms, tgt_displacement_fields, tgt_patch_centers = tgt_result
     else:
@@ -1345,7 +1345,7 @@ if __name__ == "__main__":
     storm_results = evaluate_new_storm_predictions(pred_storms, tgt_storms, overlap_threshold=args.overlap_threshold)
     
     # Compute forecasting metrics (CSI, HSS, B-MSE)
-    forecasting_metrics = compute_forecasting_metrics(pred_cappi, tgt_cappi, maxv=args.maxv, eps=1e-6)
+    forecasting_metrics = compute_forecasting_metrics(pred_composite, tgt_composite, maxv=args.maxv, eps=1e-6)
     
     # Combine results
     results = {
@@ -1353,12 +1353,12 @@ if __name__ == "__main__":
         "forecasting_metrics": forecasting_metrics
     }
     
-    print("\n=== STORM INITIATION METRICS ===")
+    print("\n STORM INITIATION METRICS ")
     print(json.dumps(storm_results, indent=2))
     
     # Print statistics in a more readable format
     if "statistics" in storm_results:
-        print("\n=== STORM STATISTICS ===")
+        print("\n STORM STATISTICS ")
         stats = storm_results["statistics"]
         for category, metrics in stats.items():
             print(f"{category.upper()}:")
@@ -1376,7 +1376,7 @@ if __name__ == "__main__":
                 print(f"  Average Duration: N/A")
                 print(f"  Average Pixels: N/A")
     
-    print("\n=== FORECASTING METRICS ===")
+    print("\n FORECASTING METRICS ")
     print(f"B-MSE: {forecasting_metrics['b_mse']:.4f}")
     print("CSI by threshold:")
     for th, csi in forecasting_metrics['csi_by_threshold'].items():
