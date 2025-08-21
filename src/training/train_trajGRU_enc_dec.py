@@ -15,7 +15,7 @@ from tqdm import tqdm
 import ast
 import json
 
-from old_scripts.traj_gru_enc_dec import TrajGRUEncoderDecoder
+from src.models.traj_gru_enc_dec import TrajGRUEncoderDecoder
 # Import utilities
 from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss, b_mse_loss
 # Import dataloaders
