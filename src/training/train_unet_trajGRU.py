@@ -74,14 +74,16 @@ def train_radar_model(
     base_ch : int, optional
         Base number of channels for U-Net encoder/decoder (default: 32).
     trajgru_hid : list, optional
-        List of hidden channels for each TrajGRU bottleneck layer. The length determines the number of layers.
-        Example: [64, 128] for a 2-layer TrajGRU bottleneck with 64 and 128 channels respectively.
-        If None, defaults to [64] (single layer).
+        List of hidden channels for each TrajGRU layer. The length determines the number of encoder/decoder stages.
+        Each stage will have a TrajGRU block with the specified number of channels.
+        Example: [32, 64, 128] means 3 stages with 32, 64, and 128 channels respectively.
+        If None, defaults to [base_ch, base_ch*2, base_ch*4] (3 stages).
     kernel : int, optional
         Kernel size for all convolutions in the U-Net (default: 3).
     L : list, optional
         List of L values (number of flow fields) for each TrajGRU layer. Must have same length as trajgru_hid.
-        Example: [5, 13] for different L values per layer.
+        Each TrajGRU layer at each stage will use the corresponding L value.
+        Example: [5, 7, 13] means the first stage uses L=5, the second uses L=7, the third uses L=13.
         If None, defaults to [5] * len(trajgru_hid).
     epochs : int, optional
         Number of training epochs (default: 15).
@@ -616,7 +618,7 @@ if __name__ == "__main__":
     train_parser = subparsers.add_parser("train", help="Train a model")
     train_parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
     train_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
-    train_parser.add_argument("--trajgru_hid", type=str, default="64", help="Comma-separated list of hidden channels for TrajGRU bottleneck layers. Examples: '64' (1 layer), '64,128' (2 layers), '64,128,128' (3 layers)")
+    train_parser.add_argument("--trajgru_hid", type=str, default="32,64,128", help="Comma-separated list of hidden channels for each TrajGRU stage. Examples: '32,64,128' (3 stages), '64,128' (2 stages), '128' (1 stage)")
     train_parser.add_argument("--kernel", type=int, default=3, help="Kernel size for all convolutions (default: 3)")
     train_parser.add_argument("--L", type=str, default="5", help="Comma-separated list of L values (flow fields) for each TrajGRU layer. Must have same length as trajgru_hid. Examples: '5' (same for all), '13,9' (different per layer)")
     train_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
@@ -644,7 +646,7 @@ if __name__ == "__main__":
     test_parser.add_argument("--npy_path", type=str, required=True, help="Path to input .npy radar file")
     test_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
     test_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
-    test_parser.add_argument("--trajgru_hid", type=str, default="64", help="Comma-separated list of hidden channels for TrajGRU bottleneck layers. Examples: '64' (1 layer), '64,128' (2 layers), '64,128,128' (3 layers)")
+    test_parser.add_argument("--trajgru_hid", type=str, default="32,64,128", help="Comma-separated list of hidden channels for each TrajGRU stage. Examples: '32,64,128' (3 stages), '64,128' (2 stages), '128' (1 stage)")
     test_parser.add_argument("--kernel", type=int, default=3, help="Kernel size for all convolutions (default: 3)")
     test_parser.add_argument("--L", type=str, default="5", help="Comma-separated list of L values (flow fields) for each TrajGRU layer. Must have same length as trajgru_hid. Examples: '5' (same for all), '13,9' (different per layer)")
     test_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
