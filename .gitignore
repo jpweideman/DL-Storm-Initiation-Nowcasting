@@ -22,5 +22,7 @@ storm_*.json
 !notebooks/storm_animation.ipynb
 !notebooks/ground_clutter.ipynb
 
+experiments/summaries
+aggregate_validation_metrics.py
 #!experiments/runs/storm_*.jsondata/processed_example/
 

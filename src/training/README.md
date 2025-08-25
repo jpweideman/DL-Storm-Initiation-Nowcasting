@@ -58,6 +58,7 @@ python src/training/train_unet_3D_cnn.py test \
 
 - For large datasets, it is possible to use the `--predictions_dir` argument to save prediction and target arrays in a separate directory (outside the run directory). 
 This is useful to avoid filling up the run directory with large files.
+- **Note**: The testing function returns arrays of **Composite Reflectivity (Maximum Intensity Projection over altitude)**. If your model outputs have multiple channels (e.g., different altitude levels), the testing function automatically reduces them to composite reflectivity by taking the maximum value over the channel dimension.
 
 ## Patch-based Training: The `--use_patches` Argument
 

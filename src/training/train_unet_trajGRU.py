@@ -34,9 +34,9 @@ def train_radar_model(
     batch_size: int = 4,
     lr: float = 2e-4,
     base_ch: int = 32,
-    trajgru_hid: list = None,
+    bottleneck_dims: list = None,
     kernel: int = 3,
-    L: list = None,
+    L: int = 5,
     epochs: int = 15,
     device: str = "cuda" ,
     loss_name: str = "mse",
@@ -73,16 +73,15 @@ def train_radar_model(
         Learning rate for the optimizer (default: 2e-4).
     base_ch : int, optional
         Base number of channels for U-Net encoder/decoder (default: 32).
-    trajgru_hid : list, optional
-        List of hidden channels for each TrajGRU bottleneck layer. The length determines the number of layers.
-        Example: [64, 128] for a 2-layer TrajGRU bottleneck with 64 and 128 channels respectively.
-        If None, defaults to [64] (single layer).
+    bottleneck_dims : list, optional
+        Sequence of widths for the bottleneck TrajGRU layers (e.g., (64, 32)).
+        Each entry corresponds to a DoubleTrajGRUBlock (i.e., two TrajGRU cells per entry).
+        The number of entries determines the depth of the bottleneck.
+        If None, defaults to (base_ch*4,) for a single bottleneck stage.
     kernel : int, optional
         Kernel size for all convolutions in the U-Net (default: 3).
-    L : list, optional
-        List of L values (number of flow fields) for each TrajGRU layer. Must have same length as trajgru_hid.
-        Example: [5, 13] for different L values per layer.
-        If None, defaults to [5] * len(trajgru_hid).
+    L : int, optional
+        Number of flow fields for all TrajGRU layers across encoder, bottleneck, and decoder (default: 5).
     epochs : int, optional
         Number of training epochs (default: 15).
     device : str, optional
@@ -110,15 +109,8 @@ def train_radar_model(
         Number of epochs with no improvement before early stopping (default: 10).
     """
     # Set default values if None
-    if trajgru_hid is None:
-        trajgru_hid = [64]
-    if L is None:
-        L = [5] * len(trajgru_hid)
-    
-    # Validate parameter lengths
-    n_layers = len(trajgru_hid)
-    if len(L) != n_layers:
-        raise ValueError(f"L must have {n_layers} elements, got {len(L)}")
+    if bottleneck_dims is None:
+        bottleneck_dims = [base_ch*4]
     
     device = device or ("cuda" if torch.cuda.is_available() else "cpu")
     save_dir = Path(save_dir)
@@ -173,7 +165,7 @@ def train_radar_model(
     # Check input channels
     if C <= 0:
         raise ValueError(f"Invalid number of channels: {C}")
-    model = UNetTrajGRU(in_ch=C, out_ch=C, base_ch=base_ch, trajgru_hid=trajgru_hid, seq_len=seq_len_in, kernel=kernel, L=L).to(device)
+    model = UNetTrajGRU(in_ch=C, out_ch=C, base_ch=base_ch, bottleneck_dims=bottleneck_dims, seq_len=seq_len_in, kernel=kernel, L=L).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     if loss_name == "mse":
         criterion = lambda pred, tgt: mse_loss(pred, tgt, maxv=maxv, eps=eps)
@@ -222,7 +214,7 @@ def train_radar_model(
                 'batch_size': batch_size,
                 'lr': lr,
                 'base_ch': base_ch,
-                'trajgru_hid': trajgru_hid,
+                'bottleneck_dims': bottleneck_dims,
                 'kernel': kernel,
                 'L': L,
                 'epochs': epochs,
@@ -437,9 +429,9 @@ def predict_test_set(
     train_val_test_split: tuple = (0.7, 0.15, 0.15),
     batch_size: int = 4,
     base_ch: int = 32,
-    trajgru_hid: list = None,
+    bottleneck_dims: list = None,
     kernel: int = 3,
-    L: list = None,
+    L: int = 5,
     which: str = "best",
     device: str = None,
     save_arrays: bool = True,
@@ -464,16 +456,15 @@ def predict_test_set(
         Batch size for inference (default: 4).
     base_ch : int, optional
         Base number of channels for U-Net encoder/decoder (default: 32).
-    trajgru_hid : list, optional
-        List of hidden channels for each TrajGRU bottleneck layer. The length determines the number of layers.
-        Example: [64, 128] for a 2-layer TrajGRU bottleneck with 64 and 128 channels respectively.
-        If None, defaults to [64] (single layer).
+    bottleneck_dims : list, optional
+        Sequence of widths for the bottleneck TrajGRU layers (e.g., (64, 32)).
+        Each entry corresponds to a DoubleTrajGRUBlock (i.e., two TrajGRU cells per entry).
+        The number of entries determines the depth of the bottleneck.
+        If None, defaults to (base_ch*4,) for a single bottleneck stage.
     kernel : int, optional
         Kernel size for all convolutions in the U-Net (default: 3).
-    L : list, optional
-        List of L values (number of flow fields) for each TrajGRU layer. Must have same length as trajgru_hid.
-        Example: [5, 13] for different L values per layer.
-        If None, defaults to [5] * len(trajgru_hid).
+    L : int, optional
+        Number of flow fields for all TrajGRU layers across encoder, bottleneck, and decoder (default: 5).
     which : str, optional
         Which checkpoint to load - 'best' for best validation checkpoint or 'latest' (default: 'best').
     device : str, optional
@@ -486,10 +477,8 @@ def predict_test_set(
         If None, files are saved in run_dir. If specified, creates the directory if it doesn't exist.
     """
     # Set default values if None
-    if trajgru_hid is None:
-        trajgru_hid = [64]
-    if L is None:
-        L = [5] * len(trajgru_hid)
+    if bottleneck_dims is None:
+        bottleneck_dims = [base_ch*4]
 
     
     device = device or "cpu"
@@ -521,7 +510,7 @@ def predict_test_set(
     test_ds  = Subset(ds, idx_test)
     dl      = DataLoader(test_ds, batch_size, shuffle=False)
 
-    model = UNetTrajGRU(in_ch=C, out_ch=C, base_ch=base_ch, trajgru_hid=trajgru_hid, seq_len=seq_len_in, kernel=kernel, L=L)
+    model = UNetTrajGRU(in_ch=C, out_ch=C, base_ch=base_ch, bottleneck_dims=bottleneck_dims, seq_len=seq_len_in, kernel=kernel, L=L)
     st = torch.load(ckpt, map_location=device)
     if isinstance(st, dict) and 'model' in st:
         st=st['model']
@@ -616,9 +605,9 @@ if __name__ == "__main__":
     train_parser = subparsers.add_parser("train", help="Train a model")
     train_parser.add_argument("--save_dir", type=str, required=True, help="Directory to save model checkpoints and stats")
     train_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
-    train_parser.add_argument("--trajgru_hid", type=str, default="64", help="Comma-separated list of hidden channels for TrajGRU bottleneck layers. Examples: '64' (1 layer), '64,128' (2 layers), '64,128,128' (3 layers)")
+    train_parser.add_argument("--bottleneck_dims", type=str, default="128", help="Comma-separated list of bottleneck channel dimensions. Examples: '128' (1 stage), '64,32' (2 stages), '128,64,32' (3 stages)")
     train_parser.add_argument("--kernel", type=int, default=3, help="Kernel size for all convolutions (default: 3)")
-    train_parser.add_argument("--L", type=str, default="5", help="Comma-separated list of L values (flow fields) for each TrajGRU layer. Must have same length as trajgru_hid. Examples: '5' (same for all), '13,9' (different per layer)")
+    train_parser.add_argument("--L", type=int, default=5, help="Number of flow fields for all TrajGRU layers (default: 5)")
     train_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     train_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     train_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
@@ -644,9 +633,9 @@ if __name__ == "__main__":
     test_parser.add_argument("--npy_path", type=str, required=True, help="Path to input .npy radar file")
     test_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
     test_parser.add_argument("--base_ch", type=int, default=32, help="Base number of channels for U-Net encoder/decoder (default: 32)")
-    test_parser.add_argument("--trajgru_hid", type=str, default="64", help="Comma-separated list of hidden channels for TrajGRU bottleneck layers. Examples: '64' (1 layer), '64,128' (2 layers), '64,128,128' (3 layers)")
+    test_parser.add_argument("--bottleneck_dims", type=str, default="128", help="Comma-separated list of bottleneck channel dimensions. Examples: '128' (1 stage), '64,32' (2 stages), '128,64,32' (3 stages)")
     test_parser.add_argument("--kernel", type=int, default=3, help="Kernel size for all convolutions (default: 3)")
-    test_parser.add_argument("--L", type=str, default="5", help="Comma-separated list of L values (flow fields) for each TrajGRU layer. Must have same length as trajgru_hid. Examples: '5' (same for all), '13,9' (different per layer)")
+    test_parser.add_argument("--L", type=int, default=5, help="Number of flow fields for all TrajGRU layers (default: 5)")
     test_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
     test_parser.add_argument("--seq_len_out", type=int, default=1, help="Output sequence length (default: 1)")
     test_parser.add_argument("--train_val_test_split", type=str, default="(0.7,0.15,0.15)", help="Tuple/list of three floats (train, val, test) that sum to 1.0, e.g., (0.7,0.15,0.15)")
@@ -682,14 +671,8 @@ if __name__ == "__main__":
                 args.use_patches = False
             else:
                 raise ValueError("--use_patches must be True or False")
-        trajgru_hid = parse_int_list(args.trajgru_hid)
-        L = parse_int_list(args.L)
-        
-        # Expand single L value to match trajgru_hid length
-        if len(L) == 1:
-            L = L * len(trajgru_hid)
-        elif len(L) != len(trajgru_hid):
-            raise ValueError(f"L must have 1 or {len(trajgru_hid)} values, got {len(L)}")
+        bottleneck_dims = parse_int_list(args.bottleneck_dims)
+        L = args.L
         
         train_radar_model(
             npy_path=args.npy_path,
@@ -701,7 +684,7 @@ if __name__ == "__main__":
             batch_size=args.batch_size,
             lr=args.lr,
             base_ch=args.base_ch,
-            trajgru_hid=trajgru_hid,
+            bottleneck_dims=bottleneck_dims,
             kernel=args.kernel,
             L=L,
             epochs=args.epochs,
@@ -725,14 +708,8 @@ if __name__ == "__main__":
         os.makedirs(args.run_dir, exist_ok=True)
         with open(os.path.join(args.run_dir, "test_args.json"), "w") as f:
             json.dump(vars(args), f, indent=2)
-        trajgru_hid = parse_int_list(args.trajgru_hid)
-        L = parse_int_list(args.L)
-        
-        # Expand single L value to match trajgru_hid length
-        if len(L) == 1:
-            L = L * len(trajgru_hid)
-        elif len(L) != len(trajgru_hid):
-            raise ValueError(f"L must have 1 or {len(trajgru_hid)} values, got {len(L)}")
+        bottleneck_dims = parse_int_list(args.bottleneck_dims)
+        L = args.L
         
         predict_test_set(
             npy_path=args.npy_path,
@@ -742,7 +719,7 @@ if __name__ == "__main__":
             train_val_test_split=train_val_test_split,
             batch_size=args.batch_size,
             base_ch=args.base_ch,
-            trajgru_hid=trajgru_hid,
+            bottleneck_dims=bottleneck_dims,
             kernel=args.kernel,
             L=L,
             which=args.which,

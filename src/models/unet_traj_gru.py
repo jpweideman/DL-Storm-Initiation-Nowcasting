@@ -1,15 +1,15 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from src.models.traj_gru_enc_dec import TrajGRUCell 
 
 
-class DoubleConv(nn.Module):
+class DoubleTrajGRUBlock(nn.Module):
     """
-    Double 2D Convolution block.
+    Double TrajGRU block.
     
-    Applies two consecutive 2D convolutions with ReLU activation.
-    Used as a building block in the U-Net architecture.
-
+    This block processes temporal dynamics through two consecutive TrajGRU cells.
+    
     Parameters
     ----------
     in_ch : int
@@ -17,29 +17,62 @@ class DoubleConv(nn.Module):
     out_ch : int
         Number of output channels.
     kernel : int, optional
-        Kernel size for convolutions (default: 3).
+        Kernel size for TrajGRU convolutions (default: 3).
+    L : int, optional
+        Number of flow fields for TrajGRU (default: 5).
+    seq_len : int, optional
+        Sequence length for temporal processing (default: 10).
     """
-    def __init__(self, in_ch, out_ch, kernel=3):
+    def __init__(self, in_ch, out_ch, kernel=3, L=5, seq_len=10):
         super().__init__()
-        p = kernel // 2
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, kernel, padding=p),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, kernel, padding=p),
-            nn.ReLU(inplace=True)
+        self.seq_len = seq_len
+        
+        self.trajgru1 = TrajGRUCell(
+            input_channel=in_ch,
+            num_filter=out_ch,
+            L=L,
+            i2h_kernel=kernel,
+            i2h_stride=1,
+            i2h_pad=kernel // 2,
         )
-
-    def forward(self, x):
-        return self.conv(x)
+        
+        self.trajgru2 = TrajGRUCell(
+            input_channel=out_ch,
+            num_filter=out_ch,
+            L=L,
+            i2h_kernel=kernel,
+            i2h_stride=1,
+            i2h_pad=kernel // 2,
+        )
+        
+    def forward(self, x, h_prev1=None, h_prev2=None):
+        # x: (B, C, H, W) 
+        B, C, H, W = x.shape
+        device = x.device
+        
+        # Initialize hidden states if not provided
+        if h_prev1 is None:
+            h_prev1 = torch.zeros(B, self.trajgru1.num_filter, H, W, device=device, dtype=x.dtype)
+        if h_prev2 is None:
+            h_prev2 = torch.zeros(B, self.trajgru2.num_filter, H, W, device=device, dtype=x.dtype)
+        
+        # Process through first TrajGRU
+        outputs1, state1 = self.trajgru1(x.unsqueeze(0), h_prev1, seq_len=1)
+        h1 = state1
+        
+        # Process through second TrajGRU 
+        outputs2, state2 = self.trajgru2(h1.unsqueeze(0), h_prev2, seq_len=1)
+        h2 = state2
+        
+        return h2
 
 
 class Down(nn.Module):
     """
-    2D Downscaling block.
+    2D Downscaling block with Double TrajGRU.
     
-    Applies max pooling followed by double convolution for downsampling.
-    Used in the encoder path of the U-Net architecture.
-
+    Applies max pooling followed by Double TrajGRU block for downsampling.
+    
     Parameters
     ----------
     in_ch : int
@@ -47,26 +80,32 @@ class Down(nn.Module):
     out_ch : int
         Number of output channels.
     kernel : int, optional
-        Kernel size for convolutions (default: 3).
+        Kernel size for TrajGRU convolutions (default: 3).
+    L : int, optional
+        Number of flow fields for TrajGRU (default: 5).
+    seq_len : int, optional
+        Sequence length for temporal processing (default: 10).
     """
-    def __init__(self, in_ch, out_ch, kernel=3):
+    def __init__(self, in_ch, out_ch, kernel=3, L=5, seq_len=10):
         super().__init__()
         self.mpconv = nn.Sequential(
             nn.MaxPool2d(2),
-            DoubleConv(in_ch, out_ch, kernel)
+            DoubleTrajGRUBlock(in_ch, out_ch, kernel, L, seq_len)
         )
 
-    def forward(self, x):
-        return self.mpconv(x)
+    def forward(self, x, h_prev1=None, h_prev2=None):
+        # Apply max pooling first
+        x_pooled = self.mpconv[0](x)
+        # Then apply Double TrajGRU
+        return self.mpconv[1](x_pooled, h_prev1, h_prev2)
 
 
 class Up(nn.Module):
     """
-    2D Upscaling block.
+    2D Upscaling block with Double TrajGRU.
     
-    Applies transposed convolution for upsampling followed by double convolution.
-    Used in the decoder path of the U-Net architecture.
-
+    Applies transposed convolution for upsampling followed by Double TrajGRU block.
+    
     Parameters
     ----------
     in_ch : int
@@ -76,14 +115,18 @@ class Up(nn.Module):
     out_ch : int
         Number of output channels.
     kernel : int, optional
-        Kernel size for convolutions (default: 3).
+        Kernel size for TrajGRU convolutions (default: 3).
+    L : int, optional
+        Number of flow fields for TrajGRU (default: 5).
+    seq_len : int, optional
+        Sequence length for temporal processing (default: 10).
     """
-    def __init__(self, in_ch, skip_ch, out_ch, kernel=3):
+    def __init__(self, in_ch, skip_ch, out_ch, kernel=3, L=5, seq_len=10):
         super().__init__()
         self.up = nn.ConvTranspose2d(in_ch, in_ch // 2, 2, stride=2)
-        self.conv = DoubleConv(in_ch // 2 + skip_ch, out_ch, kernel)
+        self.trajgru = DoubleTrajGRUBlock(in_ch // 2 + skip_ch, out_ch, kernel, L, seq_len)
 
-    def forward(self, x1, x2):
+    def forward(self, x1, x2, h_prev1=None, h_prev2=None):
         x1 = self.up(x1)
         # input is C,H,W
         diffY = x2.size()[2] - x1.size()[2]
@@ -91,112 +134,13 @@ class Up(nn.Module):
         x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
                         diffY // 2, diffY - diffY // 2])
         x = torch.cat([x2, x1], dim=1)
-        return self.conv(x)
-
-
-class TrajGRUCell(nn.Module):
-    """
-    TrajGRU Cell for spatiotemporal processing.
-    
-    A single TrajGRU cell that generates flow fields for warping and applies GRU operations.
-    Combines spatial warping with temporal gating for effective spatiotemporal modeling.
-
-    Parameters
-    ----------
-    input_channels : int
-        Number of input channels.
-    hidden_channels : int
-        Number of hidden channels.
-    kernel_size : int, optional
-        Kernel size for convolutions (default: 3).
-    L : int, optional
-        Number of flow fields for warping (default: 5).
-    zoneout : float, optional
-        Zoneout probability for regularization (default: 0.0).
-    """
-    def __init__(self, input_channels, hidden_channels, kernel_size=3, L=5, zoneout=0.0):
-        super().__init__()
-        self.input_channels = input_channels
-        self.hidden_channels = hidden_channels
-        self.kernel_size = kernel_size
-        self.L = L  # number of allowed flow fields
-        self.zoneout = zoneout
-        padding = kernel_size // 2
-        
-        # Input to hidden (i2h) - reset_gate, update_gate, new_mem
-        self.i2h = nn.Conv2d(input_channels, hidden_channels * 3, kernel_size, padding=padding)
-        
-        # Hidden to hidden (h2h) - after warping, 1x1 conv
-        self.ret = nn.Conv2d(hidden_channels * L, hidden_channels * 3, 1)
-        
-        # Flow generation - separate layers 
-        self.i2f_conv1 = nn.Conv2d(input_channels, 32, kernel_size=(5, 5), padding=(2, 2))
-        self.h2f_conv1 = nn.Conv2d(hidden_channels, 32, kernel_size=(5, 5), padding=(2, 2))
-        self.flows_conv = nn.Conv2d(32, L * 2, kernel_size=(5, 5), padding=(2, 2))
-
-    def forward(self, x, h_prev):
-        # Flow generation 
-        i2f_conv1 = self.i2f_conv1(x)
-        h2f_conv1 = self.h2f_conv1(h_prev)
-        f_conv1 = i2f_conv1 + h2f_conv1
-        f_conv1 = torch.tanh(f_conv1)
-        
-        flows = self.flows_conv(f_conv1)
-        flows = torch.split(flows, 2, dim=1)
-        
-        # Warping
-        warped_data = []
-        for flow in flows:
-            h_warped = self._warp(h_prev, -flow)  # negative flow like original implementation
-            warped_data.append(h_warped)
-        wrapped_data = torch.cat(warped_data, dim=1)
-        
-        # GRU gates 
-        i2h = self.i2h(x)
-        h2h = self.ret(wrapped_data)
-        
-        i2h_slice = torch.split(i2h, self.hidden_channels, dim=1)
-        h2h_slice = torch.split(h2h, self.hidden_channels, dim=1)
-        
-        reset_gate = torch.sigmoid(i2h_slice[0] + h2h_slice[0])
-        update_gate = torch.sigmoid(i2h_slice[1] + h2h_slice[1])
-        new_mem = torch.tanh(i2h_slice[2] + reset_gate * h2h_slice[2])
-        
-        h_new = update_gate * h_prev + (1 - update_gate) * new_mem
-        
-        if self.zoneout > 0.0 and self.training:
-            mask = torch.empty_like(h_new).bernoulli_(1 - self.zoneout)
-            h_new = torch.where(mask, h_new, h_prev)
-        
-        return h_new
-
-    def _warp(self, x, flow):
-        B, C, H, W = x.size()
-        
-        # Create meshgrid 
-        xx = torch.arange(0, W, device=x.device).view(1, -1).repeat(H, 1)
-        yy = torch.arange(0, H, device=x.device).view(-1, 1).repeat(1, W)
-        xx = xx.view(1, 1, H, W).repeat(B, 1, 1, 1)
-        yy = yy.view(1, 1, H, W).repeat(B, 1, 1, 1)
-        grid = torch.cat((xx, yy), 1).float()
-        
-        vgrid = grid + flow
-        
-        vgrid[:, 0, :, :] = 2.0 * vgrid[:, 0, :, :].clone() / max(W - 1, 1) - 1.0
-        vgrid[:, 1, :, :] = 2.0 * vgrid[:, 1, :, :].clone() / max(H - 1, 1) - 1.0
-        vgrid = vgrid.permute(0, 2, 3, 1)
-        
-        return F.grid_sample(x, vgrid, align_corners=True, padding_mode='border')
+        return self.trajgru(x, h_prev1, h_prev2)
 
 
 class UNetTrajGRU(nn.Module):
     """
-    U-Net + TrajGRU model for spatiotemporal prediction.
+    U-Net + Double TrajGRU model for spatiotemporal prediction.
     
-    Combines U-Net encoder-decoder architecture with TrajGRU bottleneck for spatiotemporal forecasting.
-    The encoder processes spatial features, the TrajGRU bottleneck handles temporal dynamics,
-    and the decoder reconstructs the spatial features.
-
     Parameters
     ----------
     in_ch : int
@@ -204,49 +148,54 @@ class UNetTrajGRU(nn.Module):
     out_ch : int
         Number of output channels.
     base_ch : int, optional
-        Number of channels in the first encoder layer (default: 32).
-    trajgru_hid : int or tuple/list of int, optional
-        Number of hidden channels in the TrajGRU bottleneck (default: 64).
-        If a tuple/list, multiple TrajGRU layers are stacked.
-        **Each entry corresponds to a single TrajGRUCell (not a double block).**
-        The number of entries determines the number of TrajGRU layers in the bottleneck.
+        Base number of channels for U-Net encoder/decoder (default: 32).
+    bottleneck_dims : tuple/list, optional
+        Sequence of widths for the bottleneck TrajGRU layers (e.g., (64, 32)).
+        Each entry corresponds to a DoubleTrajGRUBlock (i.e., two TrajGRU cells per entry).
+        The number of entries determines the depth of the bottleneck.
+        If None, defaults to (base_ch*4,) for a single bottleneck stage.
     seq_len : int, optional
         Input sequence length (number of time steps) (default: 10).
     kernel : int, optional
-        Convolution kernel size for all convolutions (must be odd) (default: 3).
-    L : int or tuple/list of int, optional
-        Number of flow fields for each TrajGRU layer (default: 5).
-        If a tuple/list, must match length of trajgru_hid.
+        Convolution kernel size for all TrajGRU convolutions (must be odd) (default: 3).
+    L : int, optional
+        Number of flow fields for all TrajGRU layers across encoder, bottleneck, and decoder (default: 5).
     """
-    def __init__(self, in_ch, out_ch, base_ch=32, trajgru_hid=64, seq_len=10, kernel=3, L=5):
+    def __init__(self, in_ch, out_ch, base_ch=32, bottleneck_dims=None, seq_len=10, kernel=3, L=5):
         super().__init__()
         self.seq_len = seq_len
         self.kernel = kernel
-        # Encoder
-        self.inc = DoubleConv(in_ch, base_ch, kernel)
-        self.down1 = Down(base_ch, base_ch*2, kernel)
-        self.down2 = Down(base_ch*2, base_ch*4, kernel)
         
-        # Bottleneck TrajGRU (support multiple layers if trajgru_hid is tuple/list)
-        if isinstance(trajgru_hid, (tuple, list)):
-            self.trajgru_layers = nn.ModuleList()
-            in_dim = base_ch*4
-            # Support per-layer L values
-            if isinstance(L, int):
-                L = [L] * len(trajgru_hid)
-            assert len(L) == len(trajgru_hid), f"L must have {len(trajgru_hid)} elements"
-            for i, hid in enumerate(trajgru_hid):
-                self.trajgru_layers.append(TrajGRUCell(in_dim, hid, kernel, L[i]))
-                in_dim = hid
-            self.trajgru_out_dim = trajgru_hid[-1]
-        else:
-            self.trajgru_layers = None
-            self.trajgru_cell = TrajGRUCell(base_ch*4, trajgru_hid, kernel, L)
-            self.trajgru_out_dim = trajgru_hid
+        # Set default bottleneck if None
+        if bottleneck_dims is None:
+            bottleneck_dims = (base_ch*4,)
+            
+        # Ensure bottleneck_dims is a tuple/list
+        if not isinstance(bottleneck_dims, (tuple, list)):
+            bottleneck_dims = (bottleneck_dims,)
         
-        # Decoder
-        self.up1 = Up(self.trajgru_out_dim, base_ch*4, base_ch*2, kernel)  
-        self.up2 = Up(base_ch*2, base_ch, base_ch, kernel)
+        self.bottleneck_dims = bottleneck_dims
+        self.L = L
+        self.n_bottleneck_stages = len(bottleneck_dims)
+        
+        # encoder 
+        self.inc = DoubleTrajGRUBlock(in_ch, base_ch, kernel, L, seq_len)
+        self.down1 = Down(base_ch, base_ch*2, kernel, L, seq_len)
+        self.down2 = Down(base_ch*2, base_ch*4, kernel, L, seq_len)
+        
+        #  bottleneck 
+        bottleneck_layers = []
+        in_channels = base_ch*4
+        for width in bottleneck_dims:
+            bottleneck_layers.append(DoubleTrajGRUBlock(in_channels, width, kernel, L, seq_len))
+            in_channels = width
+        self.bottleneck = nn.ModuleList(bottleneck_layers)
+        
+        # decoder with skip connections
+        self.up1 = Up(in_channels, base_ch*2, base_ch*2, kernel, L, seq_len)
+        self.up2 = Up(base_ch*2, base_ch, base_ch, kernel, L, seq_len)
+        
+        # Final output convolution
         self.outc = nn.Conv2d(base_ch, out_ch, 1)
 
     def forward(self, x):
@@ -254,44 +203,67 @@ class UNetTrajGRU(nn.Module):
         B, S, C, H, W = x.shape
         device = x.device
         
-        # Process each time step through the encoder and accumulate features
-        # Store all encoder features for skip connections
+        # Initialize hidden states for each stage
+        hidden_states = {}
+        
+        # Encoder hidden states
+        hidden_states['inc'] = [
+            torch.zeros(B, self.inc.trajgru1.num_filter, H, W, device=device, dtype=x.dtype),
+            torch.zeros(B, self.inc.trajgru2.num_filter, H, W, device=device, dtype=x.dtype)
+        ]
+        hidden_states['down1'] = [
+            torch.zeros(B, self.down1.mpconv[1].trajgru1.num_filter, H//2, W//2, device=device, dtype=x.dtype),
+            torch.zeros(B, self.down1.mpconv[1].trajgru2.num_filter, H//2, W//2, device=device, dtype=x.dtype)
+        ]
+        hidden_states['down2'] = [
+            torch.zeros(B, self.down2.mpconv[1].trajgru1.num_filter, H//4, W//4, device=device, dtype=x.dtype),
+            torch.zeros(B, self.down2.mpconv[1].trajgru2.num_filter, H//4, W//4, device=device, dtype=x.dtype)
+        ]
+        
+        # Bottleneck hidden states
+        bottleneck_hidden = []
+        for i, bottleneck_layer in enumerate(self.bottleneck):
+            h, w = H // 4, W // 4  # Bottleneck operates at down2 resolution
+            bottleneck_hidden.append([
+                torch.zeros(B, bottleneck_layer.trajgru1.num_filter, h, w, device=device, dtype=x.dtype),
+                torch.zeros(B, bottleneck_layer.trajgru2.num_filter, h, w, device=device, dtype=x.dtype)
+            ])
+        
+        # Process each time step through the encoder path
         encoded_features = []
+        
         for t in range(S):
             xt = x[:, t]  # (B, C, H, W)
-            x1 = self.inc(xt)
-            x2 = self.down1(x1)
-            x3 = self.down2(x2)
-            encoded_features.append((x1, x2, x3))  # Store all features for skip connections
-        
-        # Stack encoded features along time dimension
-        encoded_stack = torch.stack([feat[2] for feat in encoded_features], dim=1)  # (B, S, base_ch*4, H//4, W//4)
-        
-        # Process through TrajGRU bottleneck
-        if self.trajgru_layers is not None:
-            # Multiple TrajGRU layers
-            h_list = []
-            for cell in self.trajgru_layers:
-                h = torch.zeros(B, cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
-                h_list.append(h)
             
-            # Process temporal sequence through TrajGRU layers
-            for t in range(S):
-                xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
-                for i, cell in enumerate(self.trajgru_layers):
-                    h_list[i] = cell(xt, h_list[i])
-                    xt = h_list[i]  # Feed output of current layer to next layer
-            bottleneck_out = h_list[-1]  # Use output from last layer
-        else:
-            # Single TrajGRU layer
-            h = torch.zeros(B, self.trajgru_cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)
-            for t in range(S):
-                xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
-                h = self.trajgru_cell(xt, h)
-            bottleneck_out = h
+            # Input stage 
+            h_inc = self.inc(xt, hidden_states['inc'][0], hidden_states['inc'][1])
+            hidden_states['inc'][0] = h_inc  
+            hidden_states['inc'][1] = h_inc
+            encoded_features.append(h_inc)
+            
+            # Downsampling stages
+            h_down1 = self.down1(h_inc, hidden_states['down1'][0], hidden_states['down1'][1])
+            hidden_states['down1'][0] = h_down1
+            hidden_states['down1'][1] = h_down1
+            encoded_features.append(h_down1)
+            
+            h_down2 = self.down2(h_down1, hidden_states['down2'][0], hidden_states['down2'][1])
+            hidden_states['down2'][0] = h_down2
+            hidden_states['down2'][1] = h_down2
+            encoded_features.append(h_down2)
         
-        # Decoder with skip connections
-        x = self.up1(bottleneck_out, encoded_features[-1][2])  # Use last time step's x3 (base_ch*4)
-        x = self.up2(x, encoded_features[-1][0])  # Use last time step's x1 (base_ch)
-        x = self.outc(x)
-        return x 
+        # Bottleneck processing
+        x = encoded_features[-1]  # Deepest encoded feature 
+        
+        for i, bottleneck_layer in enumerate(self.bottleneck):
+            x = bottleneck_layer(x, bottleneck_hidden[i][0], bottleneck_hidden[i][1])
+            bottleneck_hidden[i][0] = x
+            bottleneck_hidden[i][1] = x
+        
+        # Decoder path 
+        x = self.up1(x, encoded_features[-2], hidden_states['down1'][0], hidden_states['down1'][1])
+        
+        x = self.up2(x, encoded_features[-3], hidden_states['inc'][0], hidden_states['inc'][1])
+        
+        x = self.outc(x)  # (B, out_ch, H, W)
+        return x
