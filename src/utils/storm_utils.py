@@ -1273,7 +1273,10 @@ if __name__ == "__main__":
             storms.append(detect_storms(data[t:t+1], **storm_kwargs)[0])
         
         #  Detect new storm formations 
-        print(f" {desc} - Computing new storm formations with displacement tracking")
+        # Check if displacement prediction is being used
+        use_disp = kwargs.get('use_displacement_prediction', False)
+        method = "with displacement tracking" if use_disp else "with overlap tracking"
+        print(f" {desc} - Computing new storm formations {method}")
         return detect_new_storm_formations(data, **{k: v for k, v in kwargs.items() if k != 'desc'})
 
     # Determine displacement prediction setting

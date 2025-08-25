@@ -36,6 +36,8 @@ python src/utils/storm_utils.py \
 - Storm initiation metrics: correct (predicted at correct time step), early (predicted 1 time step early), late (predicted 1 time step late), false positives, etc.
 - Forecasting metrics: Balanced Mean Squared Error (B-MSE), Critical Success Index (CSI), Heidke Skill Score (HSS) for thresholds [2, 5, 10, 30, 45] dBZ
 
+**Note**: The forecasting metrics (B-MSE, CSI, HSS) computed by `storm_utils.py` is done on the predicted and true data arrays from testing. These arrays are the Composite Reflectivity (Maximum Intensity Projection over altitude).
+
 ### Count Storms by Data Sections
 
 Analyze storm and new storm counts across temporal sections:

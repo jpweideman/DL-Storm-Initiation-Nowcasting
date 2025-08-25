@@ -141,7 +141,6 @@ class UNetTrajGRU(nn.Module):
     """
     U-Net + Double TrajGRU model for spatiotemporal prediction.
     
-    
     Parameters
     ----------
     in_ch : int
@@ -150,64 +149,54 @@ class UNetTrajGRU(nn.Module):
         Number of output channels.
     base_ch : int, optional
         Base number of channels for U-Net encoder/decoder (default: 32).
-    trajgru_hid : int or tuple/list of int, optional
-        Number of hidden channels for each TrajGRU layer. The length determines 
-        the number of encoder/decoder stages.
-        Example: [32, 64, 128] means 3 stages with 32, 64, and 128 channels respectively.
-        If None, defaults to [32, 64, 128] (3 stages).
+    bottleneck_dims : tuple/list, optional
+        Sequence of widths for the bottleneck TrajGRU layers (e.g., (64, 32)).
+        Each entry corresponds to a DoubleTrajGRUBlock (i.e., two TrajGRU cells per entry).
+        The number of entries determines the depth of the bottleneck.
+        If None, defaults to (base_ch*4,) for a single bottleneck stage.
     seq_len : int, optional
         Input sequence length (number of time steps) (default: 10).
     kernel : int, optional
         Convolution kernel size for all TrajGRU convolutions (must be odd) (default: 3).
-    L : int or tuple/list of int, optional
-        Number of flow fields for each TrajGRU layer. Must have same length as trajgru_hid.
-        Example: [5, 7, 13] for different L values per stage.
-        If None, defaults to [5] * len(trajgru_hid).
+    L : int, optional
+        Number of flow fields for all TrajGRU layers across encoder, bottleneck, and decoder (default: 5).
     """
-    def __init__(self, in_ch, out_ch, base_ch=32, trajgru_hid=None, seq_len=10, kernel=3, L=None):
+    def __init__(self, in_ch, out_ch, base_ch=32, bottleneck_dims=None, seq_len=10, kernel=3, L=5):
         super().__init__()
         self.seq_len = seq_len
         self.kernel = kernel
         
-        # Set default values if None
-        if trajgru_hid is None:
-            trajgru_hid = [base_ch, base_ch*2, base_ch*4]
-        if L is None:
-            L = [5] * len(trajgru_hid)
+        # Set default bottleneck if None
+        if bottleneck_dims is None:
+            bottleneck_dims = (base_ch*4,)
             
-        # Ensure L_values matches trajgru_hid length
-        if len(L) != len(trajgru_hid):
-            if len(L) == 1:
-                L = L * len(trajgru_hid)
-            else:
-                raise ValueError(f"L must have 1 or {len(trajgru_hid)} values, got {len(L)}")
+        # Ensure bottleneck_dims is a tuple/list
+        if not isinstance(bottleneck_dims, (tuple, list)):
+            bottleneck_dims = (bottleneck_dims,)
         
-        self.trajgru_hid = trajgru_hid
-        self.L_values = L
-        self.n_stages = len(trajgru_hid)
+        self.bottleneck_dims = bottleneck_dims
+        self.L = L
+        self.n_bottleneck_stages = len(bottleneck_dims)
         
-        # Input Double TrajGRU
-        self.inc = DoubleTrajGRUBlock(in_ch, trajgru_hid[0], kernel, L[0], seq_len)
+        # encoder 
+        self.inc = DoubleTrajGRUBlock(in_ch, base_ch, kernel, L, seq_len)
+        self.down1 = Down(base_ch, base_ch*2, kernel, L, seq_len)
+        self.down2 = Down(base_ch*2, base_ch*4, kernel, L, seq_len)
         
-        # Encoder path: downsampling stages
-        self.down_stages = nn.ModuleList()
-        for i in range(self.n_stages - 1):
-            self.down_stages.append(
-                Down(trajgru_hid[i], trajgru_hid[i+1], kernel, L[i+1], seq_len)
-            )
+        #  bottleneck 
+        bottleneck_layers = []
+        in_channels = base_ch*4
+        for width in bottleneck_dims:
+            bottleneck_layers.append(DoubleTrajGRUBlock(in_channels, width, kernel, L, seq_len))
+            in_channels = width
+        self.bottleneck = nn.ModuleList(bottleneck_layers)
         
-        # Decoder path:upsampling with skip connections
-        self.up_stages = nn.ModuleList()
-        for i in range(self.n_stages - 1):
-            up_in_ch = trajgru_hid[-(i+1)]  # Current stage channels
-            skip_ch = trajgru_hid[-(i+2)]    # Skip connection channels
-            up_out_ch = trajgru_hid[-(i+2)]  # Output channels (same as skip)
-            self.up_stages.append(
-                Up(up_in_ch, skip_ch, up_out_ch, kernel, L[-(i+2)], seq_len)
-            )
+        # decoder with skip connections
+        self.up1 = Up(in_channels, base_ch*2, base_ch*2, kernel, L, seq_len)
+        self.up2 = Up(base_ch*2, base_ch, base_ch, kernel, L, seq_len)
         
         # Final output convolution
-        self.outc = nn.Conv2d(trajgru_hid[0], out_ch, 1)
+        self.outc = nn.Conv2d(base_ch, out_ch, 1)
 
     def forward(self, x):
         # x: (B, S, C, H, W)
@@ -215,20 +204,29 @@ class UNetTrajGRU(nn.Module):
         device = x.device
         
         # Initialize hidden states for each stage
-        hidden_states = []
-        for i, hid_dim in enumerate(self.trajgru_hid):
-            # Calculate spatial dimensions for each stage
-            if i == 0:
-                # Input stage: full resolution
-                h, w = H, W
-            else:
-                # Downsampled stages: halved each time
-                h, w = H // (2**i), W // (2**i)
-            
-            # Each stage has 2 TrajGRU cells, so we need 2 hidden states per stage
-            hidden_states.append([
-                torch.zeros(B, hid_dim, h, w, device=device, dtype=x.dtype),  
-                torch.zeros(B, hid_dim, h, w, device=device, dtype=x.dtype)   
+        hidden_states = {}
+        
+        # Encoder hidden states
+        hidden_states['inc'] = [
+            torch.zeros(B, self.inc.trajgru1.num_filter, H, W, device=device, dtype=x.dtype),
+            torch.zeros(B, self.inc.trajgru2.num_filter, H, W, device=device, dtype=x.dtype)
+        ]
+        hidden_states['down1'] = [
+            torch.zeros(B, self.down1.mpconv[1].trajgru1.num_filter, H//2, W//2, device=device, dtype=x.dtype),
+            torch.zeros(B, self.down1.mpconv[1].trajgru2.num_filter, H//2, W//2, device=device, dtype=x.dtype)
+        ]
+        hidden_states['down2'] = [
+            torch.zeros(B, self.down2.mpconv[1].trajgru1.num_filter, H//4, W//4, device=device, dtype=x.dtype),
+            torch.zeros(B, self.down2.mpconv[1].trajgru2.num_filter, H//4, W//4, device=device, dtype=x.dtype)
+        ]
+        
+        # Bottleneck hidden states
+        bottleneck_hidden = []
+        for i, bottleneck_layer in enumerate(self.bottleneck):
+            h, w = H // 4, W // 4  # Bottleneck operates at down2 resolution
+            bottleneck_hidden.append([
+                torch.zeros(B, bottleneck_layer.trajgru1.num_filter, h, w, device=device, dtype=x.dtype),
+                torch.zeros(B, bottleneck_layer.trajgru2.num_filter, h, w, device=device, dtype=x.dtype)
             ])
         
         # Process each time step through the encoder path
@@ -238,29 +236,34 @@ class UNetTrajGRU(nn.Module):
             xt = x[:, t]  # (B, C, H, W)
             
             # Input stage 
-            h_inc = self.inc(xt, hidden_states[0][0], hidden_states[0][1])
-            hidden_states[0][0] = h_inc  
-            hidden_states[0][1] = h_inc  # Final output from second TrajGRU
+            h_inc = self.inc(xt, hidden_states['inc'][0], hidden_states['inc'][1])
+            hidden_states['inc'][0] = h_inc  
+            hidden_states['inc'][1] = h_inc
             encoded_features.append(h_inc)
             
             # Downsampling stages
-            current_input = h_inc
-            for i, down_stage in enumerate(self.down_stages):
-                h_down = down_stage(current_input, hidden_states[i+1][0], hidden_states[i+1][1])
-                hidden_states[i+1][0] = h_down
-                hidden_states[i+1][1] = h_down
-                current_input = h_down
-                encoded_features.append(h_down)
-        
-        # decoder path 
-        x = encoded_features[-1]  # Deepest encoded feature
-        
-        # Upsampling stages with skip connections
-        for i, up_stage in enumerate(self.up_stages):
-            skip_idx = -(i+2) 
-            skip_feature = encoded_features[skip_idx]
+            h_down1 = self.down1(h_inc, hidden_states['down1'][0], hidden_states['down1'][1])
+            hidden_states['down1'][0] = h_down1
+            hidden_states['down1'][1] = h_down1
+            encoded_features.append(h_down1)
             
-            x = up_stage(x, skip_feature, hidden_states[skip_idx][0], hidden_states[skip_idx][1])
+            h_down2 = self.down2(h_down1, hidden_states['down2'][0], hidden_states['down2'][1])
+            hidden_states['down2'][0] = h_down2
+            hidden_states['down2'][1] = h_down2
+            encoded_features.append(h_down2)
+        
+        # Bottleneck processing
+        x = encoded_features[-1]  # Deepest encoded feature 
+        
+        for i, bottleneck_layer in enumerate(self.bottleneck):
+            x = bottleneck_layer(x, bottleneck_hidden[i][0], bottleneck_hidden[i][1])
+            bottleneck_hidden[i][0] = x
+            bottleneck_hidden[i][1] = x
+        
+        # Decoder path 
+        x = self.up1(x, encoded_features[-2], hidden_states['down1'][0], hidden_states['down1'][1])
+        
+        x = self.up2(x, encoded_features[-3], hidden_states['inc'][0], hidden_states['inc'][1])
         
         x = self.outc(x)  # (B, out_ch, H, W)
         return x
