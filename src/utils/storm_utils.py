@@ -887,13 +887,13 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
             "correct": int,  # matched at same time
             "early": int,    # matched one time step before
             "late": int,     # matched one time step after
-            "false_positives": int,  # predicted storms with no match in ±1 time step
+            "incorrect_initiations": int,  # predicted storm initiations with no match in ±1 time step
             "total_true": int,  # total true new storms
             "total_pred": int,  # total predicted new storms
             "correct_over_true": float,
             "correct_over_pred": float,
             "anytime_ratio": float,
-            "false_positive_ratio": float,
+            "incorrect_initiation_ratio": float,
             "statistics": dict,  # detailed statistics for each category including:
                 # - avg_area_km2: average storm area in km²
                 # - avg_duration_frames: average storm duration in frames
@@ -975,20 +975,20 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
             "correct": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
             "early": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
             "late": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
-            "false_positives": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
+            "incorrect_initiations": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
             "true_storms": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0}
         }
         return {
             "correct": 0, 
             "early": 0, 
             "late": 0, 
-            "false_positives": sum(e["new_storm_count"] for e in new_storms_pred), 
+            "incorrect_initiations": sum(e["new_storm_count"] for e in new_storms_pred), 
             "total_true": 0, 
             "total_pred": sum(e["new_storm_count"] for e in new_storms_pred), 
             "correct_over_true": 0.0, 
             "correct_over_pred": 0.0, 
             "anytime_ratio": 0.0, 
-            "false_positive_ratio": 0.0,
+            "incorrect_initiation_ratio": 0.0,
             "statistics": default_stats
         }
     data_shape = (max_y + 1, max_x + 1)
@@ -1013,9 +1013,9 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     late_areas = []
     late_durations = []
     late_pixels = []
-    false_positive_areas = []
-    false_positive_durations = []
-    false_positive_pixels = []
+    incorrect_initiation_areas = []
+    incorrect_initiation_durations = []
+    incorrect_initiation_pixels = []
     true_storm_areas = []
     true_storm_durations = []
     true_storm_pixels = []
@@ -1069,8 +1069,8 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                 if found:
                     break
 
-    # False positives: predicted storms not matched to any true storm in ±1 time step
-    false_positives = 0
+    # Incorrect initiations: predicted storm initiations not matched to any true storm initiation in ±1 time step
+    incorrect_initiations = 0
     for t, pred_storms in pred_lookup.items():
         for j, pred_storm in enumerate(pred_storms):
             if (t, j) in matched_pred:
@@ -1094,11 +1094,11 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                 if matched:
                     break
             if not matched:
-                false_positives += 1
-                # Collect false positive statistics
-                false_positive_areas.append(pred_storm["area"])
-                false_positive_durations.append(pred_storm["duration"])
-                false_positive_pixels.append(np.sum(pred_storm["mask"]))
+                incorrect_initiations += 1
+                # Collect incorrect initiation statistics
+                incorrect_initiation_areas.append(pred_storm["area"])
+                incorrect_initiation_durations.append(pred_storm["duration"])
+                incorrect_initiation_pixels.append(np.sum(pred_storm["mask"]))
 
     total_true = sum(len(v) for v in true_lookup.values())
     total_pred = sum(len(v) for v in pred_lookup.values())
@@ -1107,7 +1107,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     correct_over_true = correct / total_true if total_true > 0 else 0.0
     correct_over_pred = correct / total_pred if total_pred > 0 else 0.0
     anytime_ratio = (correct + early + late) / total_true if total_true > 0 else 0.0
-    false_positive_ratio = false_positives / total_pred if total_pred > 0 else 0.0
+    incorrect_initiation_ratio = incorrect_initiations / total_pred if total_pred > 0 else 0.0
 
     # Calculate average statistics
     def safe_mean(values):
@@ -1146,11 +1146,11 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
             "avg_pixels": safe_mean(late_pixels),
             "storm_count": len(late_areas)
         },
-        "false_positives": {
-            "avg_area_km2": safe_mean(false_positive_areas),
-            "avg_duration_frames": safe_mean(false_positive_durations),
-            "avg_pixels": safe_mean(false_positive_pixels),
-            "storm_count": len(false_positive_areas)
+        "incorrect_initiations": {
+            "avg_area_km2": safe_mean(incorrect_initiation_areas),
+            "avg_duration_frames": safe_mean(incorrect_initiation_durations),
+            "avg_pixels": safe_mean(incorrect_initiation_pixels),
+            "storm_count": len(incorrect_initiation_areas)
         },
         "true_storms": {
             "avg_area_km2": safe_mean(true_storm_areas),
@@ -1164,13 +1164,13 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         "correct": int(correct),
         "early": int(early),
         "late": int(late),
-        "false_positives": int(false_positives),
+        "incorrect_initiations": int(incorrect_initiations),
         "total_true": int(total_true),
         "total_pred": int(total_pred),
         "correct_over_true": float(correct_over_true),
         "correct_over_pred": float(correct_over_pred),
         "anytime_ratio": float(anytime_ratio),
-        "false_positive_ratio": float(false_positive_ratio),
+        "incorrect_initiation_ratio": float(incorrect_initiation_ratio),
         "statistics": statistics
     }
 
@@ -1273,7 +1273,6 @@ if __name__ == "__main__":
             storms.append(detect_storms(data[t:t+1], **storm_kwargs)[0])
         
         #  Detect new storm formations 
-        # Check if displacement prediction is being used
         use_disp = kwargs.get('use_displacement_prediction', False)
         method = "with displacement tracking" if use_disp else "with overlap tracking"
         print(f" {desc} - Computing new storm formations {method}")

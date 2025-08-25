@@ -3,24 +3,24 @@
     "correct": 7,
     "early": 2,
     "late": 1,
-    "false_positives": 14,
+    "incorrect_initiations": 20,
     "total_true": 19,
-    "total_pred": 24,
+    "total_pred": 30,
     "correct_over_true": 0.3684210526315789,
-    "correct_over_pred": 0.2916666666666667,
+    "correct_over_pred": 0.23333333333333334,
     "anytime_ratio": 0.5263157894736842,
-    "false_positive_ratio": 0.5833333333333334,
+    "incorrect_initiation_ratio": 0.6666666666666666,
     "statistics": {
       "correct": {
-        "avg_area_km2": 30.287072508983034,
-        "avg_duration_frames": 9.571428571428571,
-        "avg_pixels": 189.42857142857142,
+        "avg_area_km2": 31.45831310344636,
+        "avg_duration_frames": 9.857142857142858,
+        "avg_pixels": 199.14285714285714,
         "storm_count": 7
       },
       "early": {
-        "avg_area_km2": 14.393512175040737,
+        "avg_area_km2": 15.659966713519122,
         "avg_duration_frames": 10.0,
-        "avg_pixels": 143.0,
+        "avg_pixels": 150.5,
         "storm_count": 2
       },
       "late": {
@@ -29,35 +29,35 @@
         "avg_pixels": 151.0,
         "storm_count": 1
       },
-      "false_positives": {
-        "avg_area_km2": 45.212130941037394,
-        "avg_duration_frames": 12.214285714285714,
-        "avg_pixels": 155.92857142857142,
-        "storm_count": 14
+      "incorrect_initiations": {
+        "avg_area_km2": 46.29485840914959,
+        "avg_duration_frames": 12.05,
+        "avg_pixels": 182.15,
+        "storm_count": 20
       },
       "true_storms": {
-        "avg_area_km2": 58.597477622730416,
+        "avg_area_km2": 58.46198495711507,
         "avg_duration_frames": 14.052631578947368,
-        "avg_pixels": 216.94736842105263,
+        "avg_pixels": 216.05263157894737,
         "storm_count": 19
       }
     }
   },
   "forecasting_metrics": {
-    "b_mse": 150.44302368164062,
+    "b_mse": 102.64474487304688,
     "csi_by_threshold": {
-      "csi_2": 0.5176786321524419,
-      "csi_5": 0.5368978658849938,
-      "csi_10": 0.5746521591726541,
-      "csi_30": 0.37520382084581316,
-      "csi_45": 0.18901995862917204
+      "csi_2": 0.5949236206029617,
+      "csi_5": 0.6684810335021422,
+      "csi_10": 0.6742431803367969,
+      "csi_30": 0.36789266978184215,
+      "csi_45": 0.1787968026924695
     },
     "hss_by_threshold": {
-      "hss_2": 0.31091957227433237,
-      "hss_5": 0.3301793817003253,
-      "hss_10": 0.3527324252123471,
-      "hss_30": 0.27000907979105704,
-      "hss_45": 0.15859636689848697
+      "hss_2": 0.35815559380904977,
+      "hss_5": 0.39147828815637203,
+      "hss_10": 0.3954329749296716,
+      "hss_30": 0.2661392737482646,
+      "hss_45": 0.1512909413850488
     }
   }
 }
