@@ -5,8 +5,7 @@ This folder contains utility functions for storm detection, evaluation, and visu
 ## Available Scripts
 
 - **storm_utils.py** — Storm detection and evaluation functions
-- **storm_animation_utils.py** — Animation and visualization functions  
-- **storm_section_counter.py** — Count storms in temporal sections of data
+- **storm_animation_utils.py** — Animation and visualization functions
 
 ## Storm Detection & Evaluation
 
@@ -37,22 +36,6 @@ python src/utils/storm_utils.py \
 - Forecasting metrics: Balanced Mean Squared Error (B-MSE), Critical Success Index (CSI), Heidke Skill Score (HSS) for thresholds [2, 5, 10, 30, 45] dBZ
 
 **Note**: The forecasting metrics (B-MSE, CSI, HSS) computed by `storm_utils.py` is done on the predicted and true data arrays from testing. These arrays are the Composite Reflectivity (Maximum Intensity Projection over altitude).
-
-### Count Storms by Data Sections
-
-Analyze storm and new storm counts across temporal sections:
-
-```bash
-python src/utils/storm_section_counter.py \
-  --npy_path data/processed/ZH_radar_dataset.npy \
-  --interval_percent 5 \
-  --batch_size 10 \
-  --reflectivity_threshold 45 \
-  --area_threshold_km2 10.0 \
-  --dilation_iterations 5 \
-  --overlap_threshold 0.1 \
-  --out results/storm_section_counts.json
-```
 
 ## Animation & Visualization
 
