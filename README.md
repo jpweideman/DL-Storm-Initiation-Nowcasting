@@ -63,7 +63,7 @@ pip install -r requirements.txt
        --no_wandb
      ```
    - Arguments used for the run are saved as `args.json` in the run directory.
-   - Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/      best_validation_metrics.json` whenever a new best validation score is achieved.
+   - Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/best_validation_metrics.json` whenever a new best validation score is achieved.
 
 4. **Test a Model**
    - Run testing on the test set using the trained UNet 3D CNN model:
