@@ -4,7 +4,7 @@ import torch.nn as nn
 
 def conv3d_block(in_ch, out_ch, kernel_size=3, stride=1, padding=1):
     """
-    Create a 3D convolutional block with BatchNorm and ReLU.
+    3D convolutional block with BatchNorm and ReLU.
 
     Parameters
     ----------
@@ -28,7 +28,7 @@ def conv3d_block(in_ch, out_ch, kernel_size=3, stride=1, padding=1):
 
 class CNN3D(nn.Module):
     """
-    Simple 3D CNN for spatiotemporal forecasting.
+    3D CNN for spatiotemporal forecasting.
 
     Parameters
     ----------
@@ -47,8 +47,6 @@ class CNN3D(nn.Module):
             layers.append(conv3d_block(last_ch, h, kernel_size=kernel, padding=kernel//2))
             last_ch = h
         self.encoder = nn.Sequential(*layers)
-        # Output (B, hidden_dims[-1], seq_in, H, W)
-        # Reduce temporal dimension (seq_in) to 1 by pooling, then output to in_ch
         self.temporal_pool = nn.AdaptiveAvgPool3d((1, None, None))
         self.to_out = nn.Conv2d(hidden_dims[-1], in_ch, 1)
         

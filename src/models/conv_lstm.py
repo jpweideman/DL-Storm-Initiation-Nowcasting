@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class ConvLSTMCell(nn.Module):
     """
-    ConvLSTM Cell for spatiotemporal processing.
+    ConvLSTM Cell for spatiotemporal forecasting.
     
     A single ConvLSTM cell that applies LSTM operations with convolutional gates.
     Processes spatial data while maintaining temporal memory through LSTM mechanisms.
@@ -41,7 +41,7 @@ class ConvLSTMCell(nn.Module):
     
 class ConvLSTM(nn.Module):
     """
-    ConvLSTM model for spatiotemporal prediction.
+    ConvLSTM model for spatiotemporal forecasting.
     
     A multi-layer ConvLSTM model that processes spatiotemporal data using convolutional LSTM cells.
     Each layer contains a ConvLSTMCell that applies LSTM operations with convolutional gates.

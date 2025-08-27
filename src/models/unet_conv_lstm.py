@@ -117,10 +117,9 @@ class ConvLSTMCell(nn.Module):
         self.kernel_size = kernel_size
         padding = kernel_size // 2
         
-        # Input to hidden (i2h) - input gate, forget gate, cell gate, output gate
+        # Input to hidden
         self.i2h = nn.Conv2d(input_channels, hidden_channels * 4, kernel_size, padding=padding)
-        
-        # Hidden to hidden (h2h) - input gate, forget gate, cell gate, output gate
+        # Hidden to hidden
         self.h2h = nn.Conv2d(hidden_channels, hidden_channels * 4, kernel_size, padding=padding)
 
     def forward(self, x, h_prev, c_prev):
@@ -148,7 +147,7 @@ class ConvLSTMCell(nn.Module):
 
 class UNetConvLSTM(nn.Module):
     """
-    U-Net + ConvLSTM model for spatiotemporal prediction.
+    U-Net + ConvLSTM model for spatiotemporal forecasting.
     
     Combines U-Net encoder-decoder architecture with ConvLSTM bottleneck for spatiotemporal forecasting.
     The encoder processes spatial features, the ConvLSTM bottleneck handles temporal dynamics,
@@ -232,8 +231,8 @@ class UNetConvLSTM(nn.Module):
                 xt = encoded_stack[:, t]  # (B, base_ch*4, H//4, W//4)
                 for i, cell in enumerate(self.convlstm_layers):
                     h_list[i], c_list[i] = cell(xt, h_list[i], c_list[i])
-                    xt = h_list[i]  # Feed output of current layer to next layer
-            bottleneck_out = h_list[-1]  # Use output from last layer
+                    xt = h_list[i]  
+            bottleneck_out = h_list[-1]  
         else:
             # Single ConvLSTM layer
             h = torch.zeros(B, self.convlstm_cell.hidden_channels, H//4, W//4, device=device, dtype=x.dtype)

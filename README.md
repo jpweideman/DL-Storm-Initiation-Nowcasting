@@ -15,9 +15,9 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 
 ## Requirements
 
-- **Python**: 3.9+ (tested with 3.12.9)
-- **GPU**: CUDA-compatible GPU recommended for training
-- **Dependencies**: Install from `requirements.txt`
+- **Python**: 3.9+ (tested with 3.12.9).
+- **GPU**: CUDA-compatible GPU recommended for training.
+- **Dependencies**: Install from `requirements.txt`.
 
 ```bash
 # Install dependencies

@@ -11,7 +11,7 @@ class TrajGRUCell(nn.Module):
     This implementation mirrors the design used in the Hzzone Precipitation-Nowcasting repository:
     - Generates per-step optical-flow-like displacements from inputs and the previous hidden state
     - Warps the previous hidden state using grid_sample
-    - Computes GRU gates from warped features + input features
+    - Computes GRU gates from warped and input features
 
     Parameters
     ----------
@@ -45,7 +45,6 @@ class TrajGRUCell(nn.Module):
         self.num_filter = num_filter
         self.L = L
         self.act = act_type
-        # Gates: reset, update, new (stacked along channel dim)
         self.i2h = nn.Conv2d(
             input_channel, num_filter * 3, kernel_size=i2h_kernel, stride=i2h_stride, padding=i2h_pad
         )
@@ -292,13 +291,12 @@ class TrajGRUForecaster(nn.Module):
 
 class TrajGRUEncoderDecoder(nn.Module):
     """
-    TrajGRU Encoder–Decoder model (encoder–forecaster) for radar nowcasting.
+    TrajGRU Encoder–Decoder model (encoder–forecaster) spatiotemporal forecasting.
 
     - Encoder: Conv2d downsampling per time step followed by TrajGRU stacks
     - Forecaster: TrajGRU generation followed by ConvTranspose2d upsampling per stage
 
-    This mirrors the structure used in the HZ Precipitation-Nowcasting implementation, while
-    keeping the CLI-configurable conv kernels/strides and flow-field count per stage.
+    This mirrors the structure used in the HZ Precipitation-Nowcasting implementation.
 
     Parameters
     ----------
