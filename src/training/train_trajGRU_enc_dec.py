@@ -240,7 +240,7 @@ def train_radar_model(
             name=run_id,
             id=run_id,
             resume="allow",
-            dir="experiments/wandb",
+            dir="experiments",
             config={
                 'seq_len_in': seq_len_in,
                 'seq_len_out': seq_len_out,
@@ -653,7 +653,7 @@ def predict_test_set(
     
     # Save MSE metrics as JSON 
     import json
-    with open(results_dir / "mse_by_ranges.json", "w") as f:
+    with open(results_dir / "test_mse_by_ranges.json", "w") as f:
         json.dump(mse_by_range, f, indent=2)
     
     print("MSE by reflectivity range:")
@@ -661,7 +661,7 @@ def predict_test_set(
         print(f"{range_name}: {mse:.4f}")
     if save_arrays:
         print(f"Saved test_preds_dBZ.npy + test_targets_dBZ.npy → {predictions_dir}")
-        print(f"Saved mse_by_ranges.json → {results_dir}")
+        print(f"Saved test_mse_by_ranges.json → {results_dir}")
     print("Validation complete.")
     return None
 

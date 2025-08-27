@@ -84,7 +84,7 @@ pip install -r requirements.txt
        --predictions_dir predictions/unet3dcnn_example
      ```
    - Large prediction/target files can be saved elsewhere using `--predictions_dir`.
-   - Evaluation results are saved in `results/` inside the run directory.
+   - Test results (MSE by dBZ ranges) are saved as `results/test_mse_by_ranges.json` in the run directory.
    
 5. **Evaluate Storm Initiation Predictions**
    - Use the storm_utils script to evaluate new storm initiations with displacement-based detection:
@@ -106,8 +106,8 @@ pip install -r requirements.txt
        --maxv 85.0 \
     ```
    - This will save a JSON file with evaluation metrics for storm initiations and forecasting performance.
-   - The displacement-based detection accounts for storm movement caused by wind/advection to reduce false positive new storm detections.
-   - Displacement vectors are only computed on patches with sufficient high-reflectivity pixels.
+   - The displacement-based detection accounts for storm movement caused by wind to reduce false positive new storm detections.
+   - Displacement vectors are only computed on patches with sufficiently high-reflectivity pixels.
    - Use `--no_displacement_prediction` for basic overlap tracking without displacement calculation.
 
 6. **Track Experiments**
@@ -116,17 +116,28 @@ pip install -r requirements.txt
 ## Evaluations 
 
 ### **Storm Initiation**
-- *Displacement-Based Detection*: Uses cross-correlation to estimate displacement caused by wind/advection and predict storm positions
-- *Physical Area Calculations*: Storm area measurement in km² accounting for polar coordinate geometry
-- *Storm Initiation Metrics*: Evaluates correct, early, late, and false positive storm initiations
+- *Displacement-Based Detection*: Uses cross-correlation to estimate displacement caused by wind for predicting storm positions.
+- *Physical Area Calculations*: Storm area measurement in km² accounting for polar coordinate geometry.
+- *Storm Initiation Metrics*: Evaluates correct, early, late, and incorrect storm initiations.
 
 ### **Forecasting Performance Metrics**
-Forecasting evaluation (on test set):
-- *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges
-- *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ
-- *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ
+Forecasting evaluation metrics are computed at two stages with different data representations:
 
-During training, validation metrics are automatically computed and logged after each epoch. When a new best validation score is achieved, all metrics are saved to `results/best_validation_metrics.json` in the run directory.
+**Validation Metrics (during training):**
+- Calculated on **multi-channel radar data** (all altitude levels)
+- Computed batch-wise during validation and averaged across epochs
+- Saved to `results/best_validation_metrics.json` when new best validation score is achieved
+
+**Testing Metrics:**
+- Calculated by `storm_utils.py` on **composite reflectivity** from test output arrays
+- Composite reflectivity represents the maximum dBZ value across all altitude levels at each pixel
+- Uses the test prediction and target arrays saved during testing (`test_preds_dBZ.npy`, `test_targets_dBZ.npy`)
+- Results saved to `results/storm_eval.json` when running storm evaluation
+
+**Metrics computed:**
+- *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges
+- *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ  
+- *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ
 
 ### **Visualizations**
 #### True vs Predicted Storms
