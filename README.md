@@ -124,20 +124,20 @@ pip install -r requirements.txt
 Forecasting evaluation metrics are computed at two stages with different data representations:
 
 **Validation Metrics (during training):**
-- Calculated on **multi-channel radar data** (all altitude levels)
-- Computed batch-wise during validation and averaged across epochs
-- Saved to `results/best_validation_metrics.json` when new best validation score is achieved
+- Calculated on **multi-channel radar data** (all altitude levels).
+- Computed batch-wise during validation and averaged across epochs.
+- Saved to `results/best_validation_metrics.json` when new best validation score is achieved.
 
 **Testing Metrics:**
-- Calculated by `storm_utils.py` on **composite reflectivity** from test output arrays
-- Composite reflectivity represents the maximum dBZ value across all altitude levels at each pixel
-- Uses the test prediction and target arrays saved during testing (`test_preds_dBZ.npy`, `test_targets_dBZ.npy`)
-- Results saved to `results/storm_eval.json` when running storm evaluation
+- Calculated by `storm_utils.py` on **composite reflectivity** from test output arrays.
+- Composite reflectivity represents the maximum dBZ value across all altitude levels at each pixel.
+- Uses the test prediction and target arrays saved during testing (`test_preds_dBZ.npy`, `test_targets_dBZ.npy`).
+- Results saved to `results/storm_eval.json` when running storm evaluation.
 
 **Metrics computed:**
-- *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges
-- *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ  
-- *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ
+- *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges.
+- *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ.
+- *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ.
 
 ### **Visualizations**
 #### True vs Predicted Storms
