@@ -33,9 +33,9 @@ python src/training/train_unet_3D_cnn.py train \
 ```
 
 - All arguments used for the run are saved as `args.json` in the run directory for reproducibility.
-- Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/best_validation_metrics.json` whenever a new best validation score is achieved.
-- Add `--no_wandb` to disable Weights & Biases logging.
-- To use [Weights & Biases](https://wandb.ai/) logging, add `--wandb_project "your-project-name"` to your command. This will log training metrics, model parameters, and enable experiment tracking.
+- Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/best_validation_metrics.json` when a new best validation score is achieved.
+- Use `--no_wandb` to disable Weights & Biases logging.
+- To use [Weights & Biases](https://wandb.ai/) logging, add `--wandb_project "project-name"` to your command. This will log training metrics, model parameters, and enable experiment tracking.
 
 ## Example: Test a UNet 3D CNN Model
 
@@ -57,20 +57,20 @@ python src/training/train_unet_3D_cnn.py test \
 ```
 
 - For large datasets, it is possible to use the `--predictions_dir` argument to save prediction and target arrays in a separate directory (outside the run directory). 
-This is useful to avoid filling up the run directory with large files.
-- **Note**: The testing function returns arrays of **Composite Reflectivity (Maximum Intensity Projection over altitude)**. If your model outputs have multiple channels (e.g., different altitude levels), the testing function automatically reduces them to composite reflectivity by taking the maximum value over the channel dimension.
+This is useful if one wants to save the large output files to an external storage location.
+- **Note**: The testing function returns arrays of **Composite Reflectivity (maximum reflectivity projection over altitudes)**. If your model outputs have multiple channels (e.g., different altitude levels), the testing function automatically reduces them to composite reflectivity.
 
-## Patch-based Training: The `--use_patches` Argument
+## Patch-based Training (`--use_patches` argument):
 
-All training and testing scripts support patch-based training and evaluation via the `--use_patches` argument. This enables the model to focus on spatial sub-regions (patches) of the radar data that are most relevant for learning, rather than always using the full spatial field.
+All training and testing scripts support patch-based training via the `--use_patches` argument. This enables the model to focus on spatial sub-regions (patches) of the radar data that are most relevant for learning, rather than always using the full spatial field.
 
 **How to use:**
 
-Add `--use_patches True` to your training or testing command, and optionally adjust the patch extraction parameters:
+Add `--use_patches True` to your training command, and optionally adjust the patch extraction parameters:
 
 - `--patch_size`: Size of each spatial patch (default: 64)
 - `--patch_stride`: Stride for patch extraction (default: 32)
-- `--patch_thresh`: Minimum normalized reflectivity for a pixel to be considered active (default: 0.35)
+- `--patch_thresh`: Minimum normalized reflectivity for a pixel to be considered active (dBZ, default: 35)
 - `--patch_frac`: Minimum fraction of active pixels in a patch (default: 0.01)
 
 **Example:**
@@ -87,7 +87,7 @@ python src/training/train_unet_3D_cnn.py train \
 
 Patch-based training is highly recommended for radar nowcasting of storm initiation.
 
-- **Focus on storms:** By extracting only patches with a significant fraction of high-reflectivity pixels, the model focuses on learning from regions with active weather (e.g., storms), rather than background or empty areas.
+- **Focus on high reflectivity areas:** By extracting only patches with a significant fraction of high-reflectivity pixels, the model focuses on learning from regions with active weather, rather than background or empty areas.
 - **Memory savings:** Patch-based training reduces memory requirements, since input dimensions are significantly smaller.
 - **Training Speedup** Training is much faster, and often leads to better storm initiation forecasts. 
 

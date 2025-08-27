@@ -50,8 +50,6 @@ def train_radar_model(
     """
     Train a 3D CNN radar forecasting model.
 
-    Pass the --no_wandb argument to disable wandb logging during training.
-
     Parameters
     ----------
     npy_path : str
@@ -276,7 +274,6 @@ def train_radar_model(
                     total_mse_sum += batch_mse
                     total_pixels += pred_dBZ.numel()
                     
-                    # Compute storm metrics for this batch using normalized data for consistency
                     # Pass maxv and eps to ensure same normalization as training loss
                     batch_metrics = compute_forecasting_metrics(
                         pred.detach().cpu().numpy(), 
@@ -408,7 +405,7 @@ def predict_test_set(
     predictions_dir: str = None,
 ):
     """
-    Run inference on the test set using a 3D CNN model from train_radar_model.
+    Run testing on a trained 3D CNN model: generate predictions, save arrays, and compute metrics.
 
     Parameters
     ----------
@@ -580,7 +577,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--early_stopping_patience", type=int, default=10, help="Number of epochs with no improvement before early stopping (default: 10). Set to 0 or negative to disable early stopping.")
 
     # Subparser for test
-    test_parser = subparsers.add_parser("test", help="Run test and compute MSE by reflectivity range")
+    test_parser = subparsers.add_parser("test", help="Test model: generate predictions and compute metrics")
     test_parser.add_argument("--npy_path", type=str, required=True, help="Path to input .npy radar file")
     test_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
     test_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")
