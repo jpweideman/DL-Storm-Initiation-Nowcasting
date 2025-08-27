@@ -56,8 +56,7 @@ class TrajGRUCell(nn.Module):
         # 1x1 conv on concatenated warped hidden maps
         self.ret = nn.Conv2d(num_filter * L, num_filter * 3, kernel_size=1)
 
-    @staticmethod
-    def _wrap(input: torch.Tensor, flow: torch.Tensor) -> torch.Tensor:
+    def _wrap(self, input: torch.Tensor, flow: torch.Tensor) -> torch.Tensor:
         """
         Warp the input feature map with the given flow using grid_sample.
         input: (B, C, H, W)
