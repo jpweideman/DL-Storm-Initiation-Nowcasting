@@ -75,7 +75,6 @@ def process_data(input_dir, output_dir, target_height, target_width, num_channel
     noise_value : float
         Noise value to replace with 0.
     """
-    # Set WRADLIB_DATA folder
     os.environ['WRADLIB_DATA'] = input_dir
     
     # Create output directory

@@ -15,7 +15,7 @@ def calculate_height_agl(range_km: np.ndarray, elevation_deg: np.ndarray,
     """
     Calculate height above ground level for radar data using the 4/3 Earth radius model.
     
-    Uses the exact formula from radar meteorology literature:
+    Uses formula:
     h = √((R_eff + h_0)² + r² + 2(R_eff + h_0)r sin(ε_0)) - R_eff
     
     Parameters
@@ -41,7 +41,7 @@ def calculate_height_agl(range_km: np.ndarray, elevation_deg: np.ndarray,
     # Effective Earth radius using 4/3 Earth radius model
     effective_earth_radius = 4/3 * earth_radius
     
-    # Exact formula from radar meteorology literature
+    # Exact formula
     # h = √((R_eff + h_0)² + r² + 2(R_eff + h_0)r sin(ε_0)) - R_eff
     height_agl = np.sqrt(
         (effective_earth_radius + radar_height_km)**2 + 
@@ -82,7 +82,7 @@ def create_ground_clutter_mask(range_km: np.ndarray, elevation_deg: np.ndarray,
     # Calculate height AGL for each pixel
     height_agl = calculate_height_agl(range_grid, elev_grid, radar_height_km)
     
-    # Mask is True where height > clutter_height
+    # Mask is true where height > clutter_height
     mask = height_agl > clutter_height_km
     
     return mask
@@ -183,7 +183,6 @@ def parse_elevations(elevations_str: str) -> List[float]:
 
 
 def main():
-    """Main function for removing ground clutter from radar data."""
     parser = argparse.ArgumentParser(
         description="Remove ground clutter from radar data using height-based masking.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -257,7 +256,7 @@ def main():
     print(f"Clutter height threshold: {args.clutter_height} km above ground")
     print(f"Radar height: {args.radar_height_above_ground} m above ground")
     
-    # Remove ground clutter with memory mapping
+    # Remove ground clutter
     cleaned_data = remove_ground_clutter_chunked(
         radar_data, range_km, elevation_deg, 
         clutter_height_km=args.clutter_height,
@@ -266,7 +265,6 @@ def main():
         output_file=args.output_file
     )
     
-
     print(f"Cleaned data saved to: {args.output_file}")
 
 
