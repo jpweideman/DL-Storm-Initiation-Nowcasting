@@ -13,10 +13,21 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 - `experiments/runs/` — Each training run saves checkpoints, args, and results here.
 - `experiments/wandb/` — [Weights & Biases](https://wandb.ai/) experiment logs (if enabled during training).
 
+## Requirements
+
+- **Python**: 3.9+ (tested with 3.12.9)
+- **GPU**: CUDA-compatible GPU recommended for training
+- **Dependencies**: Install from `requirements.txt`
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+```
+
 ## Quickstart: End-to-End Example
 
 1. **Prepare Data**
-   - Place your raw `.h5` radar files in `data/raw/` (a small example dataset of one day is already provided).
+   - Place your raw `.h5` radar files in `data/raw/` (a small example dataset of one day is provided).
 
 2. **Process Data**
    - Step 1: Process raw data into intermediate chunks:
@@ -45,7 +56,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --seq_len_out 1 \
        --batch_size 4 \
        --epochs 15 \
-       --device cpu \
+       --device cpu \ #cuda for gpu
        --loss_name weighted_mse \
        --train_val_test_split "(0.5,0.1,0.4)" \
        --early_stopping_patience 10 \
