@@ -8,10 +8,7 @@ class TrajGRUCell(nn.Module):
     """
     Trajectory GRU (TrajGRU) recurrent cell with flow-based warping.
 
-    This implementation mirrors the design used in the Hzzone Precipitation-Nowcasting repository:
-    - Generates per-step optical-flow-like displacements from inputs and the previous hidden state
-    - Warps the previous hidden state using grid_sample
-    - Computes GRU gates from warped and input features
+    This implementation mirrors the design used in the Hzzone Precipitation-Nowcasting repository.
 
     Parameters
     ----------
@@ -48,11 +45,9 @@ class TrajGRUCell(nn.Module):
         self.i2h = nn.Conv2d(
             input_channel, num_filter * 3, kernel_size=i2h_kernel, stride=i2h_stride, padding=i2h_pad
         )
-        # Flow generator
         self.i2f_conv1 = nn.Conv2d(input_channel, 32, kernel_size=5, padding=2)
         self.h2f_conv1 = nn.Conv2d(num_filter, 32, kernel_size=5, padding=2)
         self.flows_conv = nn.Conv2d(32, L * 2, kernel_size=5, padding=2)
-        # 1x1 conv on concatenated warped hidden maps
         self.ret = nn.Conv2d(num_filter * L, num_filter * 3, kernel_size=1)
 
     def _wrap(self, input: torch.Tensor, flow: torch.Tensor) -> torch.Tensor:
@@ -144,9 +139,6 @@ class TrajGRUEncoder(nn.Module):
     """
     TrajGRU Encoder: stage-wise Conv2d downsampling + TrajGRU stacks.
 
-    Each stage applies a spatial convolution (kernel=stride parameters) followed by a
-    TrajGRUCell run across the input sequence.
-
     Parameters
     ----------
     in_channels : int
@@ -199,7 +191,6 @@ class TrajGRUEncoder(nn.Module):
         hidden_states: List[torch.Tensor] = []
         feats = x_sbhwc
         for stage, rnn in zip(self.stages, self.rnns):
-            # spatial conv per frame
             feats_reshaped = feats.reshape(-1, feats.size(2), feats.size(3), feats.size(4))
             feats_reshaped = stage(feats_reshaped)
             feats = feats_reshaped.view(S, B, feats_reshaped.size(1), feats_reshaped.size(2), feats_reshaped.size(3))
@@ -293,11 +284,6 @@ class TrajGRUEncoderDecoder(nn.Module):
     """
     TrajGRU Encoder–Decoder model (encoder–forecaster) spatiotemporal forecasting.
 
-    - Encoder: Conv2d downsampling per time step followed by TrajGRU stacks
-    - Forecaster: TrajGRU generation followed by ConvTranspose2d upsampling per stage
-
-    This mirrors the structure used in the HZ Precipitation-Nowcasting implementation.
-
     Parameters
     ----------
     input_channels : int
@@ -341,10 +327,8 @@ class TrajGRUEncoderDecoder(nn.Module):
         """
         if x.ndim == 5 and x.shape[1] == self.seq_len_in:
             x = x.permute(0, 2, 1, 3, 4)
-        # (B,C,S,H,W) -> (S,B,C,H,W)
         x = x.permute(2, 0, 1, 3, 4)
         hidden_states, last_outputs = self.encoder(x)
         y = self.forecaster(hidden_states, self.seq_len_out, last_outputs)
-        # back to (B, seq_len_out, C, H, W)
         return y.permute(1, 0, 2, 3, 4)
 

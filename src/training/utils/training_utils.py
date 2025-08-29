@@ -126,6 +126,5 @@ def b_mse_loss(pred, target, maxv=85.0, eps=1e-6):
     w = torch.where((target_dBZ >= 10) & (target_dBZ < 30), torch.tensor(10.0, device=target.device), w)
     w = torch.where((target_dBZ >= 30) & (target_dBZ < 45), torch.tensor(30.0, device=target.device), w)
     w = torch.where(target_dBZ >= 45, torch.tensor(45.0, device=target.device), w)
-    # Return average weighted squared error per sample 
     b_mse = (w * (pred_dBZ - target_dBZ) ** 2).mean()
     return b_mse 

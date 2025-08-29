@@ -79,10 +79,8 @@ def create_ground_clutter_mask(range_km: np.ndarray, elevation_deg: np.ndarray,
     
     radar_height_km = radar_height_above_ground_m / 1000.0
     
-    # Calculate height AGL for each pixel
+    # Height AGL for each pixel
     height_agl = calculate_height_agl(range_grid, elev_grid, radar_height_km)
-    
-    # Mask is true where height > clutter_height
     mask = height_agl > clutter_height_km
     
     return mask
@@ -132,12 +130,10 @@ def remove_ground_clutter_chunked(radar_data: np.ndarray, range_km: np.ndarray,
         end_idx = min(start_idx + chunk_size, total_time_steps)
         
         chunk = radar_data[start_idx:end_idx]  
-        
         chunk_mask = np.expand_dims(clutter_mask, 0)  
         chunk_mask = np.expand_dims(chunk_mask, 2)    
         chunk_mask = np.repeat(chunk_mask, chunk.shape[0], axis=0)  
         chunk_mask = np.repeat(chunk_mask, chunk.shape[2], axis=2)  
-        
         cleaned_chunk = chunk * chunk_mask
         
         cleaned_data[start_idx:end_idx] = cleaned_chunk
@@ -209,27 +205,22 @@ def main():
     
     args = parser.parse_args()
     
-    # Check if input file exists
     if not os.path.exists(args.input_file):
         print(f"Error: Input file '{args.input_file}' does not exist.")
         sys.exit(1)
     
-    # Create output directory if it doesn't exist
     output_dir = os.path.dirname(args.output_file)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
     
-    # Parse elevations
     try:
         elevation_deg = parse_elevations(args.elevations)
     except ValueError as e:
         print(f"Error parsing elevations: {e}")
         sys.exit(1)
     
-    # Create range array
     range_km = create_range_array(args.max_range, args.range_resolution)
     
-    # Load radar data 
     print(f"Loading radar data from: {args.input_file}")
     try:
         radar_data = np.load(args.input_file, mmap_mode='r')
@@ -237,7 +228,6 @@ def main():
         print(f"Error loading radar data: {e}")
         sys.exit(1)
     
-    # Check data shape
     if len(radar_data.shape) != 4:
         print(f"Error: Expected 4D array (time, elevation, azimuth, range), got shape {radar_data.shape}")
         sys.exit(1)
@@ -256,7 +246,6 @@ def main():
     print(f"Clutter height threshold: {args.clutter_height} km above ground")
     print(f"Radar height: {args.radar_height_above_ground} m above ground")
     
-    # Remove ground clutter
     cleaned_data = remove_ground_clutter_chunked(
         radar_data, range_km, elevation_deg, 
         clutter_height_km=args.clutter_height,

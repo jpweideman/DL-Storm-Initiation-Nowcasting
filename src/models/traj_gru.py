@@ -7,9 +7,6 @@ from src.models.traj_gru_enc_dec import TrajGRUCell
 class TrajGRU(nn.Module):
     """
     TrajGRU model for spatiotemporal forecasting.
-    
-    A multi-layer TrajGRU model that processes spatiotemporal data using trajectory gated recurrent units.
-    Each layer contains a TrajGRUCell that generates flow fields for warping and applies GRU operations.
 
     Parameters
     ----------
@@ -57,24 +54,20 @@ class TrajGRU(nn.Module):
         self.out_conv = nn.Conv2d(hidden_channels[-1], input_channels, 1)
 
     def forward(self, x):
-        # x: (B, C, D, H, W) where D = seq_len_in
         B, C, D, H, W = x.size()
-        # Prepare sequence (S,B,C,H,W)
         seq = x.permute(2, 0, 1, 3, 4)
-        # Encode through stacked TrajGRU cells
         states = []
         for i, cell in enumerate(self.cells):
             outputs_i, state_i = cell(seq if i == 0 else seq_i, None, seq_len=self.seq_len_in)
             seq_i = outputs_i
             states.append(state_i)
-        # Forecasting using stored states
         outputs = []
         for t in range(self.seq_len_out):
             inp_t = None
             for i, cell in enumerate(self.cells):
                 out_step, new_state = cell(inp_t, states[i], seq_len=1)
                 states[i] = new_state
-                inp_t = out_step  # (1,B,C,H,W)
+                inp_t = out_step
             y_t = self.out_conv(inp_t[0])
             outputs.append(y_t.unsqueeze(2))
-        return torch.cat(outputs, dim=2)  # (B, C, seq_len_out, H, W)
+        return torch.cat(outputs, dim=2)

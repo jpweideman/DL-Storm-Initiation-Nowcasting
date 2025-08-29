@@ -241,15 +241,15 @@ def train_radar_model(
             import numpy as np
             from src.utils.storm_utils import compute_forecasting_metrics
             
-            # For MSE by dBZ bins
+
             ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
             mse_by_range = {f"mse_{r_min}_{r_max}": {"sum": 0.0, "count": 0} for r_min, r_max in ranges}
             
-            # For overall MSE
+
             total_mse_sum = 0.0
             total_pixels = 0
             
-            # For batch-by-batch metrics (B-MSE, CSI, HSS)
+
             total_b_mse = 0.0
             total_samples = 0
             total_csi = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
@@ -277,18 +277,18 @@ def train_radar_model(
                 tot += loss.item()*xb.size(0)
                 
                 if not train:
-                    # Convert to dBZ for metric computation
+
                     maxv = 85.0 + eps  # Use same maxv as b_mse_loss function to match normalization
                     pred_dBZ = pred.detach() * maxv
                     target_dBZ = yb.detach() * maxv
                     
-                    # Ensure both tensors have the same shape for metric computation
+
                     if pred_dBZ.shape != target_dBZ.shape:
-                        # Remove singleton dimensions to match shapes
+
                         pred_dBZ = pred_dBZ.squeeze()
                         target_dBZ = target_dBZ.squeeze()
                     
-                    # Compute MSE by dBZ bins batch by batch
+
                     for r_min, r_max in ranges:
                         mask = (target_dBZ >= r_min) & (target_dBZ < r_max)
                         n_pix = torch.sum(mask).item()
@@ -297,12 +297,12 @@ def train_radar_model(
                             mse_by_range[f"mse_{r_min}_{r_max}"]["sum"] += mse_bin
                             mse_by_range[f"mse_{r_min}_{r_max}"]["count"] += n_pix
                     
-                    # Compute overall MSE
+
                     batch_mse = torch.sum(((pred_dBZ - target_dBZ) ** 2)).item()
                     total_mse_sum += batch_mse
                     total_pixels += pred_dBZ.numel()
                     
-                    # Pass maxv and eps to ensure same normalization as training loss
+
                     batch_metrics = compute_forecasting_metrics(
                         pred.detach().cpu().numpy(), 
                         yb.detach().cpu().numpy(),
@@ -310,11 +310,11 @@ def train_radar_model(
                         eps=eps
                     )
                     
-                    # Accumulate B-MSE from compute_forecasting_metrics
+
                     total_b_mse += batch_metrics['b_mse'] * xb.size(0)
                     total_samples += xb.size(0)
                     
-                    # Accumulate CSI and HSS for this batch
+
                     for th in total_csi:
                         csi_key = f"csi_{th}"
                         hss_key = f"hss_{th}"
@@ -326,7 +326,7 @@ def train_radar_model(
                     total_hss_count += 1
         
         if not train:
-            # Finalize MSE by dBZ bins
+
             final_mse_by_range = {}
             for range_name, stats in mse_by_range.items():
                 if stats["count"] > 0:
@@ -334,10 +334,10 @@ def train_radar_model(
                 else:
                     final_mse_by_range[range_name] = np.nan
             
-            # Finalize overall MSE
+
             final_mse = total_mse_sum / total_pixels if total_pixels > 0 else np.nan
             
-            # Finalize storm metrics
+
             final_storm_metrics = {}
             if total_samples > 0:
                 final_storm_metrics['b_mse'] = total_b_mse / total_samples
@@ -392,7 +392,7 @@ def train_radar_model(
                 wandb.log({'best_val_loss':best_val})
             epochs_since_improvement = 0
             
-            # Save validation metrics to JSON when new best is achieved
+
             if hasattr(run_epoch, 'validation_metrics'):
                 import json
                 results_dir = save_dir / "results"
@@ -522,7 +522,7 @@ def predict_test_set(
         preds_memmap = None
         gts_memmap = None
 
-    # For MSE by range, accumulate sum of squared errors and counts for each range
+
     ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
     mse_sums = {f"mse_{r_min}_{r_max}": 0.0 for r_min, r_max in ranges}
     mse_counts = {f"mse_{r_min}_{r_max}": 0 for r_min, r_max in ranges}
@@ -531,7 +531,7 @@ def predict_test_set(
     with torch.no_grad():
         for xb, yb in tqdm(dl, desc='Testing', total=len(dl)):
             xb = xb.to(device)
-            # UNet TrajGRU expects (B, S, C, H, W) format
+
             if yb.ndim == 4:
                 yb = yb.unsqueeze(2)
             out_n = model(xb)
@@ -547,7 +547,7 @@ def predict_test_set(
             if save_arrays:
                 preds_memmap[idx:idx+batch_size] = out_n_dBZ
                 gts_memmap[idx:idx+batch_size] = yb_dBZ
-            # Compute MSE by range for this batch
+
             for r_min, r_max in ranges:
                 mask = (yb_dBZ >= r_min) & (yb_dBZ < r_max)
                 n_pix = np.sum(mask)
@@ -568,7 +568,7 @@ def predict_test_set(
         np.savez(predictions_dir/"test_preds_dBZ_meta.npz", **meta)
         np.savez(predictions_dir/"test_targets_dBZ_meta.npz", **meta)
 
-    # Finalize MSE by range
+
     mse_by_range = {}
     for r_min, r_max in ranges:
         key = f"mse_{r_min}_{r_max}"
@@ -576,11 +576,11 @@ def predict_test_set(
             mse_by_range[key] = mse_sums[key] / mse_counts[key]
         else:
             mse_by_range[key] = np.nan
-    # Create results directory in run_dir and save MSE metrics there
+
     results_dir = run_dir / "results"
     results_dir.mkdir(exist_ok=True)
     
-    # Save MSE metrics as JSON 
+ 
     import json
     with open(results_dir / "test_mse_by_ranges.json", "w") as f:
         json.dump(mse_by_range, f, indent=2)

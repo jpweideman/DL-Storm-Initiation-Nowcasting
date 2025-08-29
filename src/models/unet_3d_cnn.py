@@ -6,9 +6,6 @@ import torch.nn.functional as F
 class DoubleConv3D(nn.Module):
     """
     Double 3D Convolution block.
-    
-    Applies two consecutive 3D convolutions with ReLU activation.
-    Used as a building block in the U-Net architecture.
 
     Parameters
     ----------
@@ -35,9 +32,6 @@ class DoubleConv3D(nn.Module):
 class Down3D(nn.Module):
     """
     3D Downscaling block.
-    
-    Applies max pooling followed by double convolution for downsampling.
-    Used in the encoder path of the U-Net architecture.
 
     Parameters
     ----------
@@ -61,9 +55,6 @@ class Down3D(nn.Module):
 class Up3D(nn.Module):
     """
     3D Upscaling block.
-    
-    Applies transposed convolution for upsampling followed by double convolution.
-    Used in the decoder path of the U-Net architecture.
 
     Parameters
     ----------
@@ -82,7 +73,6 @@ class Up3D(nn.Module):
         self.conv = DoubleConv3D(in_ch // 2 + skip_ch, out_ch, kernel)
     def forward(self, x1, x2):
         x1 = self.up(x1)
-        # input is (B, C, D, H, W)
         diffD = x2.size()[2] - x1.size()[2]
         diffY = x2.size()[3] - x1.size()[3]
         diffX = x2.size()[4] - x1.size()[4]
@@ -107,7 +97,7 @@ class UNet3DCNN(nn.Module):
         Base number of channels for U-Net encoder/decoder (default: 32).
     bottleneck_dims : tuple/list, optional
         Sequence of widths for the 3D CNN bottleneck layers (e.g., (32, 64, 32)).
-        **Each entry corresponds to a DoubleConv3D block (i.e., two Conv3D layers per entry).**
+        Each entry corresponds to a DoubleConv3D block (i.e., two Conv3D layers per entry).
         The number of entries determines the depth of the bottleneck in terms of blocks, but the total number of Conv3D layers is 2 × len(bottleneck_dims).
     kernel : int, optional
         Kernel size (default: 3).
@@ -117,24 +107,20 @@ class UNet3DCNN(nn.Module):
     def __init__(self, in_ch, out_ch, base_ch=32, bottleneck_dims=(64,), kernel=3, seq_len_out=1):
         super().__init__()
         self.seq_len_out = seq_len_out
-        # Encoder
         self.inc = DoubleConv3D(in_ch, base_ch, kernel)
         self.down1 = Down3D(base_ch, base_ch*2, kernel)
         self.down2 = Down3D(base_ch*2, base_ch*4, kernel)
-        # Bottleneck of stacked 3D convs 
         bottleneck_layers = []
         in_channels = base_ch*4
         for width in bottleneck_dims:
             bottleneck_layers.append(DoubleConv3D(in_channels, width, kernel))
             in_channels = width
         self.bottleneck = nn.Sequential(*bottleneck_layers)
-        # Decoder
         self.up1 = Up3D(in_channels, base_ch*2, base_ch*2, kernel)
         self.up2 = Up3D(base_ch*2, base_ch, base_ch, kernel)
         self.outc = nn.Conv3d(base_ch, out_ch, 1)
         
     def forward(self, x):
-        # x: (B, C, D, H, W)
         x1 = self.inc(x)
         x2 = self.down1(x1)
         x3 = self.down2(x2)
@@ -142,6 +128,5 @@ class UNet3DCNN(nn.Module):
         x = self.up1(x_bottleneck, x2)
         x = self.up2(x, x1)
         x = self.outc(x)
-        # Output: (B, out_ch, D, H, W)
-        x = x[:, :, -self.seq_len_out:, :, :]  # (B, out_ch, seq_len_out, H, W)
+        x = x[:, :, -self.seq_len_out:, :, :]
         return x 

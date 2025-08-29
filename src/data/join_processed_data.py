@@ -16,10 +16,9 @@ def join_data(input_dir, output_dir, output_name):
     data_arrays = []
     all_filenames = []
 
-    # Collect all relevant directories for progress bar
     join_targets = []   
 
-    for root, dirs, files in os.walk(input_dir):      # for data in intermediate directory
+    for root, dirs, files in os.walk(input_dir):
         dirs.sort(key=lambda x: int(x) if x.isdigit() else x)
         files.sort()
         if 'data.npy' in files and 'filenames.json' in files:
@@ -37,11 +36,9 @@ def join_data(input_dir, output_dir, output_name):
             sample_shape = arr.shape[1:]  
         total_samples += arr.shape[0]
 
-    # Pre-allocate memmap array for output
     out_path = os.path.join(output_dir, output_name)
     final_data = np.lib.format.open_memmap(out_path, mode='w+', dtype='float32', shape=(total_samples, *sample_shape))
 
-    # Fill the memmap array and join filenames
     idx = 0
     all_filenames = []
     for root in tqdm(join_targets, desc="Joining processed data"):
@@ -53,7 +50,6 @@ def join_data(input_dir, output_dir, output_name):
             names = json.load(f)
             all_filenames.extend(names)
 
-    # Save filenames as ZH_radar_filenames.json
     filenames_path = os.path.join(output_dir, 'ZH_radar_filenames.json')
     with open(filenames_path, 'w') as f:
         json.dump(all_filenames, f)

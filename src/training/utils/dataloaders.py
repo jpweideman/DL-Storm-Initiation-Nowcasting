@@ -1,9 +1,3 @@
-"""
-Radar Data Loading Classes
-
-This module contains PyTorch Dataset classes for loading radar data for training
-spatiotemporal prediction models. Supports both full-frame and patch-based training.
-"""
 
 import os
 import numpy as np
@@ -15,9 +9,6 @@ from tqdm import tqdm
 class RadarWindowDataset(Dataset):
     """
     Dataset for loading radar data in sliding window format.
-    
-    This dataset loads full radar frames and creates input-output pairs
-    for spatiotemporal prediction models.
     
     Parameters
     ----------
@@ -42,7 +33,6 @@ class RadarWindowDataset(Dataset):
         return self.last
 
     def __getitem__(self, i):
-        # Load the required slice, clip negatives, and normalize
         X = np.maximum(self.cube[i:i+self.seq_in], 0) / (self.maxv + 1e-6)
         Y = np.maximum(self.cube[i+self.seq_in:i+self.seq_in+self.seq_out], 0) / (self.maxv + 1e-6)
         X = X.astype(np.float32)
@@ -53,10 +43,6 @@ class RadarWindowDataset(Dataset):
 class PatchRadarWindowDataset(Dataset):
     """
     Dataset for loading radar data in patch-based format.
-    
-    This dataset extracts patches from radar frames and creates input-output pairs
-    for training models on smaller spatial regions. Only patches with sufficient
-    signal (above threshold) are included.
     
     Parameters
     ----------
@@ -95,10 +81,8 @@ class PatchRadarWindowDataset(Dataset):
         T, C, H, W = cube.shape
         last = T - seq_in - seq_out + 1
         
-        # Normalize patch_thresh for internal use
         patch_thresh_normalized = self.patch_thresh / (self.maxv + 1e-6)
         
-        # Patch index caching
         if patch_index_path is not None and os.path.exists(patch_index_path):
             print(f"Loading patch indices from {patch_index_path}")
             self.patches = np.load(patch_index_path, allow_pickle=True).tolist()
