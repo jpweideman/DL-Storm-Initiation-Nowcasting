@@ -6,7 +6,7 @@ import argparse
 
 def join_data(input_dir, output_dir, output_name):
     """Join processed data from intermediate directory into final dataset."""
-    # Ensure output directory exists
+    # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
     print(f"Joining data from: {input_dir}")
@@ -16,7 +16,7 @@ def join_data(input_dir, output_dir, output_name):
     data_arrays = []
     all_filenames = []
 
-    # First, collect all relevant directories for progress bar
+    # Collect all relevant directories for progress bar
     join_targets = []   
 
     for root, dirs, files in os.walk(input_dir):      # for data in intermediate directory
@@ -29,7 +29,6 @@ def join_data(input_dir, output_dir, output_name):
         print(f"No processed data found in {input_dir}")
         return
 
-    # Determine total number of samples and sample shape
     total_samples = 0
     sample_shape = None
     for root in join_targets:
@@ -54,7 +53,7 @@ def join_data(input_dir, output_dir, output_name):
             names = json.load(f)
             all_filenames.extend(names)
 
-    # Always save filenames as ZH_radar_filenames.json
+    # Save filenames as ZH_radar_filenames.json
     filenames_path = os.path.join(output_dir, 'ZH_radar_filenames.json')
     with open(filenames_path, 'w') as f:
         json.dump(all_filenames, f)

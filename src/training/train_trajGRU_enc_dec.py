@@ -63,9 +63,6 @@ def train_radar_model(
     """
     Train a symmetric TrajGRU radar forecasting model.
 
-    All architecture lists (hidden_channels, kernel_size, L, conv_kernels, conv_strides) must be the same length (number of layers).
-    The encoder alternates Conv2d and TrajGRU layers; the decoder alternates TrajGRU and ConvTranspose2d layers, using the reversed lists for all parameters.
-
     Parameters
     ----------
     npy_path : str
@@ -240,7 +237,7 @@ def train_radar_model(
             name=run_id,
             id=run_id,
             resume="allow",
-            dir="experiments/wandb",
+            dir="experiments",
             config={
                 'seq_len_in': seq_len_in,
                 'seq_len_out': seq_len_out,
@@ -340,7 +337,6 @@ def train_radar_model(
                     total_mse_sum += batch_mse
                     total_pixels += pred_dBZ.numel()
                     
-                    # Compute storm metrics for this batch using normalized data for consistency
                     # Pass maxv and eps to ensure same normalization as training loss
                     batch_metrics = compute_forecasting_metrics(
                         pred.detach().cpu().numpy(), 
@@ -475,7 +471,7 @@ def predict_test_set(
     predictions_dir: str = None,
 ):
     """
-    Run inference on the test set using a symmetric TrajGRU model.
+    Run testing on a trained symmetric TrajGRU model: generate predictions, save arrays, and compute metrics.
 
     All architecture lists (hidden_channels, kernel_size, L, conv_kernels, conv_strides) must be the same length (number of layers).
     The encoder alternates Conv2d and TrajGRU layers; the decoder alternates TrajGRU and ConvTranspose2d layers, using the reversed lists for all parameters.
@@ -603,8 +599,7 @@ def predict_test_set(
                     raise ValueError(f"Expected seq_len_out=1, got {yb.shape[2]}")
             
             out_n = model(xb)
-            # Handle shape: model outputs (B, seq_len_out, C, H, W)
-            # We want (B, C, H, W) for single timestep prediction
+
             if out_n.shape[1] == 1:  # seq_len_out == 1
                 out_n = out_n.squeeze(1)  # Remove sequence dimension
             else:
@@ -653,7 +648,7 @@ def predict_test_set(
     
     # Save MSE metrics as JSON 
     import json
-    with open(results_dir / "mse_by_ranges.json", "w") as f:
+    with open(results_dir / "test_mse_by_ranges.json", "w") as f:
         json.dump(mse_by_range, f, indent=2)
     
     print("MSE by reflectivity range:")
@@ -661,7 +656,7 @@ def predict_test_set(
         print(f"{range_name}: {mse:.4f}")
     if save_arrays:
         print(f"Saved test_preds_dBZ.npy + test_targets_dBZ.npy → {predictions_dir}")
-        print(f"Saved mse_by_ranges.json → {results_dir}")
+        print(f"Saved test_mse_by_ranges.json → {results_dir}")
     print("Validation complete.")
     return None
 
@@ -698,7 +693,7 @@ if __name__ == "__main__":
     train_parser.add_argument("--conv_strides", type=str, required=True, help="Comma-separated list of strides for encoder Conv2d/decoder ConvTranspose2d (symmetric). WARNING: Be careful, large strides can cause blank predictions")
 
     # Test subparser
-    test_parser = subparsers.add_parser("test", help="Test the model (inference)")
+    test_parser = subparsers.add_parser("test", help="Test model: generate predictions and compute metrics")
     test_parser.add_argument("--run_dir", type=str, required=True, help="Directory containing model checkpoints and stats")
     test_parser.add_argument("--npy_path", type=str, default="data/processed/ZH_radar_dataset.npy", help="Path to input .npy radar file")
     test_parser.add_argument("--seq_len_in", type=int, default=10, help="Input sequence length (default: 10)")

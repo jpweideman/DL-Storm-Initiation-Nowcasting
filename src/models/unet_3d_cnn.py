@@ -95,7 +95,7 @@ class Up3D(nn.Module):
 
 class UNet3DCNN(nn.Module):
     """
-    U-Net 3D CNN for spatiotemporal prediction.
+    U-Net 3D CNN for spatiotemporal forecasting.
 
     Parameters
     ----------
@@ -121,7 +121,7 @@ class UNet3DCNN(nn.Module):
         self.inc = DoubleConv3D(in_ch, base_ch, kernel)
         self.down1 = Down3D(base_ch, base_ch*2, kernel)
         self.down2 = Down3D(base_ch*2, base_ch*4, kernel)
-        # Bottleneck: stack 3D convs with user-specified widths
+        # Bottleneck of stacked 3D convs 
         bottleneck_layers = []
         in_channels = base_ch*4
         for width in bottleneck_dims:
@@ -143,6 +143,5 @@ class UNet3DCNN(nn.Module):
         x = self.up2(x, x1)
         x = self.outc(x)
         # Output: (B, out_ch, D, H, W)
-        # Take the last seq_len_out slices along D
         x = x[:, :, -self.seq_len_out:, :, :]  # (B, out_ch, seq_len_out, H, W)
         return x 

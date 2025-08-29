@@ -4,10 +4,9 @@ import torch.nn.functional as F
 from src.models.traj_gru_enc_dec import TrajGRUCell
 
 
-
 class TrajGRU(nn.Module):
     """
-    TrajGRU model for spatiotemporal prediction.
+    TrajGRU model for spatiotemporal forecasting.
     
     A multi-layer TrajGRU model that processes spatiotemporal data using trajectory gated recurrent units.
     Each layer contains a TrajGRUCell that generates flow fields for warping and applies GRU operations.
@@ -37,7 +36,6 @@ class TrajGRU(nn.Module):
         self.seq_len_out = seq_len_out
         self.n_layers = len(hidden_channels)
         self.hidden_channels = hidden_channels
-        # Support per-layer kernel_size and L
         if isinstance(kernel_size, int):
             kernel_size = [kernel_size] * self.n_layers
         if isinstance(L, int):
@@ -63,13 +61,13 @@ class TrajGRU(nn.Module):
         B, C, D, H, W = x.size()
         # Prepare sequence (S,B,C,H,W)
         seq = x.permute(2, 0, 1, 3, 4)
-        # Encode through stacked HZTrajGRU cells
+        # Encode through stacked TrajGRU cells
         states = []
         for i, cell in enumerate(self.cells):
             outputs_i, state_i = cell(seq if i == 0 else seq_i, None, seq_len=self.seq_len_in)
             seq_i = outputs_i
             states.append(state_i)
-        # Autoregressive forecasting using stored states
+        # Forecasting using stored states
         outputs = []
         for t in range(self.seq_len_out):
             inp_t = None

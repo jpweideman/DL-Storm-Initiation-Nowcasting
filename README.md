@@ -13,10 +13,21 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 - `experiments/runs/` — Each training run saves checkpoints, args, and results here.
 - `experiments/wandb/` — [Weights & Biases](https://wandb.ai/) experiment logs (if enabled during training).
 
+## Requirements
+
+- **Python**: 3.9+ (tested with 3.12.9).
+- **GPU**: CUDA-compatible GPU recommended for training.
+- **Dependencies**: Install from `requirements.txt`.
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+```
+
 ## Quickstart: End-to-End Example
 
 1. **Prepare Data**
-   - Place your raw `.h5` radar files in `data/raw/` (a small example dataset of one day is already provided).
+   - Place your raw `.h5` radar files in `data/raw/` (a small example dataset of one day is provided).
 
 2. **Process Data**
    - Step 1: Process raw data into intermediate chunks:
@@ -45,14 +56,14 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --seq_len_out 1 \
        --batch_size 4 \
        --epochs 15 \
-       --device cpu \
+       --device cpu \ #cuda for gpu
        --loss_name weighted_mse \
        --train_val_test_split "(0.5,0.1,0.4)" \
        --early_stopping_patience 10 \
        --no_wandb
      ```
    - Arguments used for the run are saved as `args.json` in the run directory.
-   - Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/      best_validation_metrics.json` whenever a new best validation score is achieved.
+   - Validation metrics (CSI, HSS, B-MSE, MSE by dBZ bins) are automatically computed during training and saved to `results/best_validation_metrics.json` whenever a new best validation score is achieved.
 
 4. **Test a Model**
    - Run testing on the test set using the trained UNet 3D CNN model:
@@ -73,7 +84,7 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --predictions_dir predictions/unet3dcnn_example
      ```
    - Large prediction/target files can be saved elsewhere using `--predictions_dir`.
-   - Evaluation results are saved in `results/` inside the run directory.
+   - Test results (MSE by dBZ ranges) are saved as `results/test_mse_by_ranges.json` in the run directory.
    
 5. **Evaluate Storm Initiation Predictions**
    - Use the storm_utils script to evaluate new storm initiations with displacement-based detection:
@@ -95,8 +106,8 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
        --maxv 85.0 \
     ```
    - This will save a JSON file with evaluation metrics for storm initiations and forecasting performance.
-   - The displacement-based detection accounts for storm movement caused by wind/advection to reduce false positive new storm detections.
-   - Displacement vectors are only computed on patches with sufficient high-reflectivity pixels.
+   - The displacement-based detection accounts for storm movement caused by wind to reduce false positive new storm detections.
+   - Displacement vectors are only computed on patches with sufficiently high-reflectivity pixels.
    - Use `--no_displacement_prediction` for basic overlap tracking without displacement calculation.
 
 6. **Track Experiments**
@@ -105,17 +116,28 @@ This repository provides a pipeline for radar precipitation nowcasting of storm 
 ## Evaluations 
 
 ### **Storm Initiation**
-- *Displacement-Based Detection*: Uses cross-correlation to estimate displacement caused by wind/advection and predict storm positions
-- *Physical Area Calculations*: Storm area measurement in km² accounting for polar coordinate geometry
-- *Storm Initiation Metrics*: Evaluates correct, early, late, and false positive storm initiations
+- *Displacement-Based Detection*: Uses cross-correlation to estimate displacement caused by wind for predicting storm positions.
+- *Physical Area Calculations*: Storm area measurement in km² accounting for polar coordinate geometry.
+- *Storm Initiation Metrics*: Evaluates correct, early, late, and incorrect storm initiations.
 
 ### **Forecasting Performance Metrics**
-Forecasting evaluation (on test set):
-- *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges
-- *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ
-- *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ
+Forecasting evaluation metrics are computed at two stages with different data representations:
 
-During training, validation metrics are automatically computed and logged after each epoch. When a new best validation score is achieved, all metrics are saved to `results/best_validation_metrics.json` in the run directory.
+**Validation Metrics (during training):**
+- Calculated on **multi-channel radar data** (all altitude levels).
+- Computed batch-wise during validation and averaged across epochs.
+- Saved to `results/best_validation_metrics.json` when new best validation score is achieved.
+
+**Testing Metrics:**
+- Calculated by `storm_utils.py` on **composite reflectivity** from test output arrays.
+- Composite reflectivity represents the maximum dBZ value across all altitude levels at each pixel.
+- Uses the test prediction and target arrays saved during testing (`test_preds_dBZ.npy`, `test_targets_dBZ.npy`).
+- Results saved to `results/storm_eval.json` when running storm evaluation.
+
+**Metrics computed:**
+- *B-MSE (Balanced Mean Squared Error)*: Weighted error metric for different reflectivity ranges.
+- *CSI (Critical Success Index)*: For thresholds [2, 5, 10, 30, 45] dBZ.
+- *HSS (Heidke Skill Score)*: For thresholds [2, 5, 10, 30, 45] dBZ.
 
 ### **Visualizations**
 #### True vs Predicted Storms

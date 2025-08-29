@@ -1,6 +1,6 @@
 # Model Architectures
 
-This folder contains modular definitions of all deep learning models used for radar nowcasting.
+This folder contains modular definitions of all deep learning models used in this repository.
 
 ## Available Models
 

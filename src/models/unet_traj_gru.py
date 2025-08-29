@@ -8,7 +8,7 @@ class DoubleTrajGRUBlock(nn.Module):
     """
     Double TrajGRU block.
     
-    This block processes temporal dynamics through two consecutive TrajGRU cells.
+    This block processes spatiotemporal dynamics through two consecutive TrajGRU cells.
     
     Parameters
     ----------
@@ -50,7 +50,6 @@ class DoubleTrajGRUBlock(nn.Module):
         B, C, H, W = x.shape
         device = x.device
         
-        # Initialize hidden states if not provided
         if h_prev1 is None:
             h_prev1 = torch.zeros(B, self.trajgru1.num_filter, H, W, device=device, dtype=x.dtype)
         if h_prev2 is None:
@@ -94,9 +93,9 @@ class Down(nn.Module):
         )
 
     def forward(self, x, h_prev1=None, h_prev2=None):
-        # Apply max pooling first
+        # Max pooling first
         x_pooled = self.mpconv[0](x)
-        # Then apply Double TrajGRU
+        # Double TrajGRU
         return self.mpconv[1](x_pooled, h_prev1, h_prev2)
 
 
@@ -139,7 +138,7 @@ class Up(nn.Module):
 
 class UNetTrajGRU(nn.Module):
     """
-    U-Net + Double TrajGRU model for spatiotemporal prediction.
+    U-Net + Double TrajGRU model for spatiotemporal forecasting.
     
     Parameters
     ----------
@@ -168,8 +167,7 @@ class UNetTrajGRU(nn.Module):
         
         # Set default bottleneck if None
         if bottleneck_dims is None:
-            bottleneck_dims = (base_ch*4,)
-            
+            bottleneck_dims = (base_ch*4,) 
         # Ensure bottleneck_dims is a tuple/list
         if not isinstance(bottleneck_dims, (tuple, list)):
             bottleneck_dims = (bottleneck_dims,)
@@ -203,7 +201,6 @@ class UNetTrajGRU(nn.Module):
         B, S, C, H, W = x.shape
         device = x.device
         
-        # Initialize hidden states for each stage
         hidden_states = {}
         
         # Encoder hidden states
@@ -223,7 +220,7 @@ class UNetTrajGRU(nn.Module):
         # Bottleneck hidden states
         bottleneck_hidden = []
         for i, bottleneck_layer in enumerate(self.bottleneck):
-            h, w = H // 4, W // 4  # Bottleneck operates at down2 resolution
+            h, w = H // 4, W // 4  
             bottleneck_hidden.append([
                 torch.zeros(B, bottleneck_layer.trajgru1.num_filter, h, w, device=device, dtype=x.dtype),
                 torch.zeros(B, bottleneck_layer.trajgru2.num_filter, h, w, device=device, dtype=x.dtype)
@@ -261,9 +258,7 @@ class UNetTrajGRU(nn.Module):
             bottleneck_hidden[i][1] = x
         
         # Decoder path 
-        x = self.up1(x, encoded_features[-2], hidden_states['down1'][0], hidden_states['down1'][1])
-        
+        x = self.up1(x, encoded_features[-2], hidden_states['down1'][0], hidden_states['down1'][1]) 
         x = self.up2(x, encoded_features[-3], hidden_states['inc'][0], hidden_states['inc'][1])
-        
         x = self.outc(x)  # (B, out_ch, H, W)
         return x
