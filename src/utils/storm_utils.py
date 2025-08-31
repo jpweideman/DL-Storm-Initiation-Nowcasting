@@ -31,19 +31,16 @@ def compute_csi_hss(pred, target, threshold):
     pred_binary = (pred >= threshold).astype(int)
     target_binary = (target >= threshold).astype(int)
     
-    # Calculate confusion matrix elements
     TP = np.sum((pred_binary == 1) & (target_binary == 1))  # True Positive
     FN = np.sum((pred_binary == 0) & (target_binary == 1))  # False Negative
     FP = np.sum((pred_binary == 1) & (target_binary == 0))  # False Positive
     TN = np.sum((pred_binary == 0) & (target_binary == 0))  # True Negative
     
-    # Calculate CSI
     if TP + FN + FP == 0:
         CSI = 0.0
     else:
         CSI = TP / (TP + FN + FP)
     
-    # Calculate HSS
     denominator = (TP + FN) * (FN + TN) + (TP + FP) * (FP + TN)
     if denominator == 0:
         HSS = 0.0
@@ -121,10 +118,10 @@ def compute_forecasting_metrics(pred, target, maxv=85.0, eps=1e-6):
         pred_dBZ = pred * (maxv + eps)
         target_dBZ = target * (maxv + eps)
     
-    # Compute B-MSE
+    # B-MSE
     b_mse_value = compute_b_mse(pred, target, maxv=maxv, eps=eps)
     
-    # Compute CSI and HSS for different thresholds using dBZ values
+    # Thresholds for CSI and HSS
     thresholds = [2, 5, 10, 30, 45]
     csi_by_threshold = {}
     hss_by_threshold = {}
@@ -226,13 +223,13 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dila
         storms_in_frame = []
 
         for contour in contours:
-            path = Path(contour[:, ::-1])  # (x, y) ordering
+            path = Path(contour[:, ::-1])  
 
-            # Grid coordinates - for (azimuth_bins, range_bins) shape
+            # Grid coordinates for (azimuth_bins, range_bins) shape
             # frame_data.shape = (azimuth_bins, range_bins)
             x_grid, y_grid = np.meshgrid(
-                np.arange(frame_data.shape[1]),  # range_bins (x-axis)
-                np.arange(frame_data.shape[0])   # azimuth_bins (y-axis)
+                np.arange(frame_data.shape[1]), 
+                np.arange(frame_data.shape[0])   
             )
             coords = np.vstack((x_grid.ravel(), y_grid.ravel())).T
             inside = path.contains_points(coords).reshape(frame_data.shape)  # (azimuth_bins, range_bins)
@@ -242,7 +239,7 @@ def detect_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dila
             physical_area = np.sum(pixel_areas * storm_pixels)
 
             if physical_area >= area_threshold_km2:
-                storm_coords = contour[:, [1, 0]].tolist()  # (x, y) points
+                storm_coords = contour[:, [1, 0]].tolist()  
                 storms_in_frame.append({
                     "mask": inside.astype(int), 
                     "contour": storm_coords,
@@ -411,9 +408,23 @@ def calculate_contour_overlap(contour1, contour2, data_shape=None):
         print(f"Warning: Error calculating contour overlap: {e}")
         return 0.0
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, max_displacement=100):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, max_displacement=100, min_correlation_quality=0.5):
     """
-    Detects new storm formations using either displacement-based prediction (with patches) or simple overlap tracking.
+    Detect new storm formations using displacement-based prediction or simple overlap tracking.
+    
+    This function identifies which storms are "new" (not continuations of previous storms), 
+    by comparing current storms with predicted positions based on wind displacement.
+    
+    Displacement-based method (use_displacement_prediction=True):
+        Compute displacement vectors and fields using patch-based cross-correlation.
+        Then for each time step: 
+            - Predict where previous storms should be based on displacement field
+            - Compare current storms with predicted positions
+            - Storms that don't overlap with predictions are considered "new"
+    
+    Simple overlap method (use_displacement_prediction=False):
+        Compare storms directly between consecutive frames
+        Storms that don't overlap with previous storms are considered "new"
     
     Parameters
     ----------
@@ -430,7 +441,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     storm_tracking_overlap_threshold : float, optional
         Overlap threshold for tracking storms across time steps (default: 0.2).
     use_displacement_prediction : bool, optional
-        Whether to use displacement-based prediction with patches (default: True).
+        Whether to use displacement-based prediction (default: True).
     patch_size : int, optional
         Size of patches for cross-correlation (default: 32).
     patch_stride : int, optional
@@ -443,12 +454,16 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
         Maximum value for normalization (default: 85.0).
     max_displacement : int, optional
         Maximum expected displacement in pixels (default: 100).
+    min_correlation_quality : float, optional
+        Minimum correlation quality threshold (default: 0.5).
     
     Returns
     -------
     tuple or list
-        If use_displacement_prediction=True: tuple of (new_storms_summary, displacement_fields, selected_patch_centers)
-        If use_displacement_prediction=False: new_storms_summary only (simple overlap tracking)
+        If use_displacement_prediction=True: 
+            (new_storms_summary, displacement_fields, selected_patch_centers, quality_scores)
+        If use_displacement_prediction=False: 
+            new_storms_summary
     """
     storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
     
@@ -459,7 +474,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
 
     if use_displacement_prediction and len(data) > 1:
         # Compute displacement vectors and displacement fields for all time steps
-        displacement_vectors, displacement_fields, selected_patch_centers = compute_displacement_vectors(
+        displacement_vectors, displacement_fields, selected_patch_centers, quality_scores = compute_displacement_vectors(
             data, 
             patch_size=patch_size,
             patch_stride=patch_stride,
@@ -467,6 +482,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             patch_thresh=patch_thresh,
             patch_frac=patch_frac,
             maxv=maxv,
+            min_correlation_quality=min_correlation_quality,
             show_progress=True
         )
         
@@ -529,7 +545,7 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
             # Update previous masks for next iteration
             previous_masks = current_masks
         
-        return new_storms_summary, displacement_fields, selected_patch_centers
+        return new_storms_summary, displacement_fields, selected_patch_centers, quality_scores
     else:
         # Simple overlap-based method without displacement prediction
         previous_masks = []
@@ -590,36 +606,52 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
         return new_storms_summary
 
 def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displacement=100, show_progress=True, 
-                                patch_thresh=35.0, patch_frac=0.015, maxv=85.0):
+                                patch_thresh=35.0, patch_frac=0.015, maxv=85.0, min_correlation_quality=0.50):
     """
-    Compute displacement vectors using patch-based cross-correlation between consecutive frames.
-    These vectors represent pixel displacement caused by wind/advection.
+    Compute displacement vectors and fields using patch-based cross-correlation.
+    
+    This function calculates how radar echoes move between consecutive frames.
+    
+    Patch displacement calculation:
+       - Divides each radar frame into overlapping patches (e.g., 32x32 pixels)
+       - For each patch, finds its displacement between consecutive frames using cross-correlation
+       - Only uses patches with sufficient reflectivity and good correlation quality
+    
+    Temporal smoothing:
+       - Uses moving average (70% current + 30% previous) to prevent sudden wind direction changes
+    
+    Displacement field creation:
+       - Uses create_displacement_field() to interpolate sparse patch displacements into dense fields
+       - Returns displacement field for every pixel in the image
     
     Parameters
     ----------
     data : np.ndarray
-        Radar reflectivity data of shape (T, H, W).
+        Radar reflectivity data of shape (T, H, W) where T=time, H=height, W=width.
     patch_size : int, optional
-        Size of patches for cross-correlation (default: 32).
+        Size of patches for cross-correlation in pixels (default: 32).
     patch_stride : int, optional
-        Stride between patches (default: 16).
+        Stride between patch centers in pixels (default: 16).
     max_displacement : int, optional
-        Maximum expected displacement in pixels (default: 100).
+        Maximum allowed displacement magnitude in pixels (default: 100).
     show_progress : bool, optional
         Whether to show progress bar (default: True).
     patch_thresh : float, optional
-        Threshold for patch selection in dBZ (default: 35.0).
+        Minimum reflectivity threshold for patch selection in dBZ (default: 35.0).
     patch_frac : float, optional
-        Minimum fraction of pixels above threshold (default: 0.015).
+        Minimum fraction of patch pixels above threshold (default: 0.015).
     maxv : float, optional
-        Maximum value for normalization (default: 85.0).
+        Maximum reflectivity value for normalization (default: 85.0).
+    min_correlation_quality : float, optional
+        Minimum correlation quality threshold (0-1, default: 0.5).
     
     Returns
     -------
     tuple
-        - displacement_vectors: np.ndarray of shape (T-1, 2) - (u, v) displacement components for each time step
-        - displacement_fields: np.ndarray of shape (T-1, H, W, 2) - displacement field for each time step
-        - selected_patch_centers: list of lists, patch centers selected for each time step
+        - displacement_vectors: np.ndarray of shape (T-1, 2) - Global average displacement (u, v) for each time step
+        - displacement_fields: np.ndarray of shape (T-1, H, W, 2) - Dense displacement field for every pixel
+        - selected_patch_centers: list of lists - Patch center coordinates used for each time step
+        - quality_scores: np.ndarray of shape (T-1,) - Quality scores based on displacement consistency
     """
     T, H, W = data.shape
     
@@ -635,7 +667,16 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
     displacement_vectors = np.zeros((T-1, 2))  # (u, v) components
     displacement_fields = np.zeros((T-1, H, W, 2))  # (u, v) at each pixel
     selected_patch_centers = []  # List to store selected patch centers for each time step
+    quality_scores = np.zeros(T-1)  # Quality scores for each time step
     
+    # Quality filtering helper function
+    def compute_correlation_quality(correlation, peak_y, peak_x):
+        """Compute correlation quality as ratio of peak to maximum possible correlation."""
+        max_correlation = correlation.max()
+        if max_correlation > 0:
+            return correlation[peak_y, peak_x] / max_correlation
+        return 0.0
+
     # Create progress bar for displacement computation
     if show_progress:
         t_range = tqdm(range(T-1), desc="Computing displacement vectors")
@@ -705,7 +746,7 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
                 patch1_norm = (patch1 - np.mean(patch1)) / (np.std(patch1) + 1e-8)
                 patch2_norm = (patch2 - np.mean(patch2)) / (np.std(patch2) + 1e-8)
                 
-                # Compute cross-correlation for this patch
+                # Standard correlation computation
                 correlation = correlate2d(patch1_norm, patch2_norm, mode='full')
                 
                 # Find the peak of correlation
@@ -723,10 +764,22 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
                     continue
                     
                 max_idx = np.unravel_index(np.argmax(search_region), search_region.shape)
+                peak_y = y_start_search + max_idx[0]
+                peak_x = x_start_search + max_idx[1]
                 
                 # Calculate displacement to the new position for this patch
-                u = -(max_idx[1] - (center_x - x_start_search))  # x displacement (horizontal)
-                v = -(max_idx[0] - (center_y - y_start_search))  # y displacement (vertical)
+                u = -(peak_x - center_x)  # x displacement (horizontal)
+                v = -(peak_y - center_y)  # y displacement (vertical)
+                
+                # Check displacement magnitude - reject if too large
+                displacement_magnitude = np.sqrt(u**2 + v**2)
+                if displacement_magnitude > max_displacement:
+                    continue
+                
+                # Quality filtering: only use patches with good correlations
+                quality = compute_correlation_quality(correlation, peak_y, peak_x)
+                if quality < min_correlation_quality:
+                    continue
                 
                 # Check for invalid values
                 if np.isnan(u) or np.isinf(u) or np.isnan(v) or np.isinf(v):
@@ -743,35 +796,84 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
         # Calculate global displacement vector (average of all patches)
         if len(patch_displacements) > 0:
             patch_displacements = np.array(patch_displacements)
-            displacement_vectors[t] = np.mean(patch_displacements, axis=0)
-        else:
-            displacement_vectors[t] = [0.0, 0.0]
-        
-        # Create displacement field by interpolating patch displacements
-        if len(patch_displacements) > 0:
-            displacement_fields[t] = create_displacement_field(patch_displacements, patch_positions, (H, W))
-        else:
-            displacement_fields[t] = np.zeros((H, W, 2))
-    
-    return displacement_vectors, displacement_fields, selected_patch_centers
+            current_displacement = np.mean(patch_displacements, axis=0)
+            
+            # Apply temporal smoothing to prevent sudden wind direction changes
+            if t > 0:
+                # Moving average with previous displacement (weighted average)
+                # Use 70% current, 30% previous to allow gradual changes
+                alpha = 0.7  # Weight for current displacement
+                displacement_vectors[t] = alpha * current_displacement + (1 - alpha) * displacement_vectors[t-1]
+            else:
+                displacement_vectors[t] = current_displacement
+            
 
-def create_displacement_field(patch_displacements, patch_positions, field_shape):
+
+            displacement_std = np.std(patch_displacements, axis=0)
+            displacement_magnitude = np.linalg.norm(displacement_vectors[t])
+            quality_scores[t] = 1.0 / (1.0 + np.mean(displacement_std) / (displacement_magnitude + 1e-6))
+        else:
+
+            if t > 0:
+                displacement_vectors[t] = displacement_vectors[t-1]
+                quality_scores[t] = 0.5
+            else:
+                displacement_vectors[t] = [0.0, 0.0]
+                quality_scores[t] = 0.0
+        
+
+        if len(patch_displacements) > 0:
+
+            previous_field = displacement_fields[t-1] if t > 0 else None
+            displacement_fields[t] = create_displacement_field(patch_displacements, patch_positions, (H, W), previous_field, max_displacement)
+        else:
+
+            if t > 0:
+
+                displacement_fields[t] = np.full((H, W, 2), displacement_vectors[t])
+            else:
+                displacement_fields[t] = np.zeros((H, W, 2))
+    
+    return displacement_vectors, displacement_fields, selected_patch_centers, quality_scores
+
+def create_displacement_field(patch_displacements, patch_positions, field_shape, previous_displacement_field=None, max_displacement=100):
     """
-    Create a displacement field by interpolating patch displacement vectors.
+    Create a dense displacement field by interpolating sparse patch displacement vectors.
+    
+    This function takes displacement vectors from patch centers and creates a displacement
+    field for every pixel in the image using distance-weighted interpolation.
+    
+    Interpolation process:
+        For each pixel in the image:
+            - Find all patch centers within max_interpolation_distance (30 pixels).
+            - Calculate weights based on inverse distance (closer patches have higher weight).
+            - Compute weighted average of nearby patch displacements.
+        If no nearby patches exist:
+            - Use previous displacement field as fallback (if reasonable magnitude).
+            - Otherwise use zero displacement.
+    
+    Smoothing:
+        Applies Gaussian smoothing (sigma=0.5) to reduce interpolation noise.
     
     Parameters
     ----------
     patch_displacements : list
-        List of [u, v] displacement vectors for each patch.
+        List of [u, v] displacement vectors for each patch that passed quality filtering.
     patch_positions : list
-        List of [y, x] positions for each patch.
+        List of [y, x] coordinates of patch centers.
     field_shape : tuple
-        (H, W) shape of the displacement field.
+        (H, W) shape of the output displacement field.
+    previous_displacement_field : np.ndarray, optional
+        Displacement field from previous time step for fallback (default: None).
+    max_displacement : int, optional
+        Maximum displacement magnitude for fallback validation (default: 100).
     
     Returns
     -------
     np.ndarray
-        Displacement field of shape (H, W, 2) - interpolated displacement field.
+        Dense displacement field of shape (H, W, 2) where:
+        - displacement_field[y, x, 0] = horizontal displacement (u component)
+        - displacement_field[y, x, 1] = vertical displacement (v component)
     """
     H, W = field_shape
     displacement_field = np.zeros((H, W, 2))
@@ -781,69 +883,99 @@ def create_displacement_field(patch_displacements, patch_positions, field_shape)
     
     patch_displacements = np.array(patch_displacements)
     patch_positions = np.array(patch_positions)
-    
-    # Create coordinate grids
     y_grid, x_grid = np.mgrid[0:H, 0:W]
     
-    # For each component (u, v)
+
     for comp in range(2):
-        # Use inverse distance weighting for interpolation
         field_comp = np.zeros((H, W))
         
         for i in range(H):
             for j in range(W):
-                # Calculate distances to all patch positions
-                distances = np.sqrt((patch_positions[:, 0] - i)**2 + (patch_positions[:, 1] - j)**2)
+
+                    distances = np.sqrt((patch_positions[:, 0] - i)**2 + (patch_positions[:, 1] - j)**2)
                 
-                # Avoid division by zero
-                min_dist = np.min(distances)
-                if min_dist < 1e-6:
-                    # Use nearest neighbor
-                    nearest_idx = np.argmin(distances)
-                    field_comp[i, j] = patch_displacements[nearest_idx, comp]
-                else:
-                    # Inverse distance weighting
-                    weights = 1.0 / (distances + 1e-6)  # Add small epsilon to avoid division by zero
-                    field_comp[i, j] = np.sum(patch_displacements[:, comp] * weights) / np.sum(weights)
+
+                    min_dist = np.min(distances)
+                    if min_dist < 1e-6:
+
+                        nearest_idx = np.argmin(distances)
+                        field_comp[i, j] = patch_displacements[nearest_idx, comp]
+                    else:
+                        max_interpolation_distance = 30
+                        nearby_mask = distances <= max_interpolation_distance
+                        
+                        if np.any(nearby_mask):
+
+                            nearby_distances = distances[nearby_mask]
+                            nearby_displacements = patch_displacements[nearby_mask, comp]
+                            weights = 1.0 / (nearby_distances + 1e-6)
+                            field_comp[i, j] = np.sum(nearby_displacements * weights) / np.sum(weights)
+                        else:
+
+                            if previous_displacement_field is not None:
+                                prev_disp = previous_displacement_field[i, j, comp]
+
+                                if abs(prev_disp) < max_displacement:
+                                    field_comp[i, j] = prev_disp
+                                else:
+                                    field_comp[i, j] = 0.0
+                            else:
+
+                                field_comp[i, j] = 0.0
         
-        displacement_field[:, :, comp] = field_comp
+
+        from scipy.ndimage import gaussian_filter
+        field_comp_smooth = gaussian_filter(field_comp, sigma=0.5)
+        displacement_field[:, :, comp] = field_comp_smooth
     
     return displacement_field
 
 def predict_storm_positions(previous_storms, displacement_field, data_shape):
     """
-    Predict where storms from the previous frame should be in the current frame based on displacement field.
+    Predict where storms from the previous frame should be in the current frame.
+    
+    This function uses the displacement field (wind map) to predict where each storm
+    pixel should move in the next frame. Each pixel in a storm is moved according to
+    its local displacement vector.
+    
+    Prediction process:
+        For each storm from the previous frame:
+            - Get coordinates of all storm pixels.
+            - Look up displacement vector for each pixel from the displacement field.
+            - Move each pixel: new_position = old_position + displacement_vector.
+            - Create new storm mask at predicted positions.
+            - Apply dilation to account for prediction uncertainty.
     
     Parameters
     ----------
     previous_storms : list
-        List of storm masks from previous frame.
+        List of binary storm masks from previous frame (each mask is H×W boolean array).
     displacement_field : np.ndarray
-        Displacement field of shape (H, W, 2) with (u, v) components at each pixel.
+        Dense displacement field of shape (H, W, 2) with (u, v) components at each pixel.
     data_shape : tuple
-        (H, W) shape of the data.
+        (H, W) shape of the radar data.
     
     Returns
     -------
     list
-        List of predicted storm masks.
+        List of predicted storm masks (binary arrays) showing where storms should be
+        in the current frame based on wind displacement.
     """
     H, W = data_shape
     
     predicted_masks = []
     
     for storm_mask in previous_storms:
-        # Create coordinate grids
+
         y_coords, x_coords = np.where(storm_mask)
         
         if len(y_coords) == 0:
             continue
             
-        # Get displacement vectors at storm pixel locations
-        storm_displacement_u = displacement_field[y_coords, x_coords, 0]  # u component
-        storm_displacement_v = displacement_field[y_coords, x_coords, 1]  # v component
+        storm_displacement_u = displacement_field[y_coords, x_coords, 0]
+        storm_displacement_v = displacement_field[y_coords, x_coords, 1]
         
-        # Apply displacement (each pixel moves according to local displacement field)
+
         new_y = y_coords + storm_displacement_v
         new_x = x_coords + storm_displacement_u
         
@@ -851,15 +983,15 @@ def predict_storm_positions(previous_storms, displacement_field, data_shape):
         if np.any(np.isnan(new_y)) or np.any(np.isnan(new_x)) or np.any(np.isinf(new_y)) or np.any(np.isinf(new_x)):
             continue
             
-        # Clip to valid range and convert to integers
+
         new_y = np.clip(new_y, 0, H-1).astype(int)
         new_x = np.clip(new_x, 0, W-1).astype(int)
         
-        # Create new mask
+
         predicted_mask = np.zeros((H, W), dtype=bool)
         predicted_mask[new_y, new_x] = True
         
-        # Apply dilation to account for uncertainty in displacement prediction
+
         predicted_mask = binary_dilation(predicted_mask, iterations=2)
         
         predicted_masks.append(predicted_mask)
@@ -925,7 +1057,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         mask = path.contains_points(coords).reshape(shape)
         return mask
 
-    # Build lookup: time_step -> list of (mask, used_flag, area, duration)
+
     def build_storm_masks(new_storms, data_shape):
         """
         Build lookup table for storm masks and metadata.
@@ -970,7 +1102,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                     max_x = max(max_x, int(arr[:, 0].max()))
                     max_y = max(max_y, int(arr[:, 1].max()))
     if not found:
-        # Return default statistics when no storms are found
+
         default_stats = {
             "correct": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
             "early": {"avg_area_km2": None, "avg_duration_frames": None, "avg_pixels": None, "storm_count": 0},
@@ -993,7 +1125,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         }
     data_shape = (max_y + 1, max_x + 1)
 
-    # Build mask lookups
+
     pred_lookup = build_storm_masks(new_storms_pred, data_shape)
     true_lookup = build_storm_masks(new_storms_true, data_shape)
 
@@ -1003,7 +1135,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     matched_pred = set()  # (t, idx)
     matched_true = set()  # (t, idx)
     
-    # Lists to collect statistics
+
     correct_areas = []
     correct_durations = []
     correct_pixels = []
@@ -1020,10 +1152,10 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     true_storm_durations = []
     true_storm_pixels = []
 
-    # For each true storm, look for matching pred storm in t-1, t, t+1
+
     for t, true_storms in true_lookup.items():
         for i, true_storm in enumerate(true_storms):
-            # Add to true storm statistics 
+ 
             true_storm_areas.append(true_storm["area"])
             true_storm_durations.append(true_storm["duration"])
             true_storm_pixels.append(np.sum(true_storm["mask"]))
@@ -1075,7 +1207,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
         for j, pred_storm in enumerate(pred_storms):
             if (t, j) in matched_pred:
                 continue
-            # Check if this pred storm matches any true storm in t-1, t, t+1
+
             matched = False
             for dt in [-1, 0, 1]:
                 tt = t + dt
@@ -1095,7 +1227,7 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                     break
             if not matched:
                 incorrect_initiations += 1
-                # Collect incorrect initiation statistics
+
                 incorrect_initiation_areas.append(pred_storm["area"])
                 incorrect_initiation_durations.append(pred_storm["duration"])
                 incorrect_initiation_pixels.append(np.sum(pred_storm["mask"]))
@@ -1103,13 +1235,13 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     total_true = sum(len(v) for v in true_lookup.values())
     total_pred = sum(len(v) for v in pred_lookup.values())
 
-    # Ratios
+
     correct_over_true = correct / total_true if total_true > 0 else 0.0
     correct_over_pred = correct / total_pred if total_pred > 0 else 0.0
     anytime_ratio = (correct + early + late) / total_true if total_true > 0 else 0.0
     incorrect_initiation_ratio = incorrect_initiations / total_pred if total_pred > 0 else 0.0
 
-    # Calculate average statistics
+
     def safe_mean(values):
         """
         Calculate mean of values, returning None if no valid values.
@@ -1232,10 +1364,7 @@ if __name__ == "__main__":
     pred = load_memmap_with_meta(args.preds)
     tgt = load_memmap_with_meta(args.targets)
 
-    # Always reduce to (T, H, W) by taking max over channel dimension if present
-    # Composite Reflectivity (Maximum Intensity Projection over altitude)
-    # If input is (N, C, H, W), take max over axis=1
-    # If input is already (N, H, W), do nothing
+
     if pred.ndim == 4:
         pred_composite = np.max(pred, axis=1)
         tgt_composite = np.max(tgt, axis=1)
@@ -1245,7 +1374,7 @@ if __name__ == "__main__":
     else:
         raise ValueError("Input arrays must be of shape (N, C, H, W) or (N, H, W)")
 
-    # Progress bar for storm detection
+
     def detect_with_progress(data, **kwargs):
         """
         Detect storms with progress tracking.
@@ -1263,22 +1392,22 @@ if __name__ == "__main__":
             Result from detect_new_storm_formations.
         """
         storms = []
-        # Extract parameters for detect_storms (only the parameters it actually accepts)
+
         storm_kwargs = {k: v for k, v in kwargs.items() 
                        if k in ['reflectivity_threshold', 'area_threshold_km2', 'dilation_iterations']}
         
-        #  Detect storms in each frame 
+ 
         desc = kwargs.get('desc', 'Detecting storms')
         for t in tqdm(range(data.shape[0]), desc=f"{desc} - Frame detection"):
             storms.append(detect_storms(data[t:t+1], **storm_kwargs)[0])
         
-        #  Detect new storm formations 
+ 
         use_disp = kwargs.get('use_displacement_prediction', False)
         method = "with displacement tracking" if use_disp else "with overlap tracking"
         print(f" {desc} - Computing new storm formations {method}")
         return detect_new_storm_formations(data, **{k: v for k, v in kwargs.items() if k != 'desc'})
 
-    # Determine displacement prediction setting
+
     use_displacement_prediction = args.use_displacement_prediction and not args.no_displacement_prediction
     
 
@@ -1335,21 +1464,21 @@ if __name__ == "__main__":
             use_displacement_prediction=False,
             desc='True storms')
 
-    # Handle different return types based on displacement prediction setting
+
     if use_displacement_prediction and len(pred_composite) > 1:
-        pred_storms, pred_displacement_fields, pred_patch_centers = pred_result
-        tgt_storms, tgt_displacement_fields, tgt_patch_centers = tgt_result
+        pred_storms, pred_displacement_fields, pred_patch_centers, pred_quality_scores = pred_result
+        tgt_storms, tgt_displacement_fields, tgt_patch_centers, tgt_quality_scores = tgt_result
     else:
         pred_storms = pred_result
         tgt_storms = tgt_result
 
-    # Evaluate storm initiation predictions
+
     storm_results = evaluate_new_storm_predictions(pred_storms, tgt_storms, overlap_threshold=args.overlap_threshold)
     
-    # Compute forecasting metrics (CSI, HSS, B-MSE)
+
     forecasting_metrics = compute_forecasting_metrics(pred_composite, tgt_composite, maxv=args.maxv, eps=1e-6)
     
-    # Combine results
+
     results = {
         "storm_initiation_metrics": storm_results,
         "forecasting_metrics": forecasting_metrics
@@ -1358,7 +1487,7 @@ if __name__ == "__main__":
     print("\n STORM INITIATION METRICS ")
     print(json.dumps(storm_results, indent=2))
     
-    # Print statistics in a more readable format
+
     if "statistics" in storm_results:
         print("\n STORM STATISTICS ")
         stats = storm_results["statistics"]
@@ -1387,7 +1516,7 @@ if __name__ == "__main__":
     for th, hss in forecasting_metrics['hss_by_threshold'].items():
         print(f"  {th}: {hss:.4f}")
 
-    # Save to JSON
+
     with open(args.out, 'w') as f:
         json.dump(results, f, indent=2)
 

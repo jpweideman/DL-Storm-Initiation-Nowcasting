@@ -5,7 +5,7 @@ from tqdm import tqdm
 import json
 import argparse
 
-# Helper function to process one file
+
 def process_one_file(file_path, target_h, target_w, num_channels=14, variable="ZH", noise_value=96.00197):
     """
     Process a single HDF5 file to extract radar data.
@@ -37,22 +37,20 @@ def process_one_file(file_path, target_h, target_w, num_channels=14, variable="Z
         if variable not in data[scan_key]:
             raise ValueError(f"{variable} not found in {scan_key} of file {file_path}")
         arr = data[scan_key][variable]["data"]
-        arr[arr == noise_value] = 0  # clean noise
+        arr[arr == noise_value] = 0
         h, w = arr.shape
-        # Pad height
         if h > target_h:
             arr = arr[:target_h, :]
         elif h < target_h:
             pad_bottom = target_h - h
             arr = np.pad(arr, ((0, pad_bottom), (0, 0)), mode='constant', constant_values=0)
-        # Pad width
         if w > target_w:
             arr = arr[:, :target_w]
         elif w < target_w:
             pad_right = target_w - w
             arr = np.pad(arr, ((0, 0), (0, pad_right)), mode='constant', constant_values=0)
         processed_scans.append(arr)
-    return np.stack(processed_scans)  # shape: (num_channels, target_h, target_w)
+    return np.stack(processed_scans)
 
 def process_data(input_dir, output_dir, target_height, target_width, num_channels, variable, noise_value):
     """
@@ -87,15 +85,12 @@ def process_data(input_dir, output_dir, target_height, target_width, num_channel
     print(f"Variable: {variable}")
     print(f"Noise value: {noise_value}")
     
-    # Recursively process and save by directory
     for root, dirs, files in os.walk(input_dir):
-        # Sort year and month directories numerically if possible
         dirs.sort(key=lambda x: int(x) if x.isdigit() else x)
         files.sort()
         h5_files = [f for f in files if f.endswith(".h5")]
         if not h5_files:
             continue
-        # Create corresponding output directory
         rel_dir = os.path.relpath(root, input_dir)
         out_dir = os.path.join(output_dir, rel_dir)
         os.makedirs(out_dir, exist_ok=True)

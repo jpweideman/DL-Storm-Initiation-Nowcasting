@@ -8,8 +8,6 @@ class DoubleTrajGRUBlock(nn.Module):
     """
     Double TrajGRU block.
     
-    This block processes spatiotemporal dynamics through two consecutive TrajGRU cells.
-    
     Parameters
     ----------
     in_ch : int
@@ -46,7 +44,6 @@ class DoubleTrajGRUBlock(nn.Module):
         )
         
     def forward(self, x, h_prev1=None, h_prev2=None):
-        # x: (B, C, H, W) 
         B, C, H, W = x.shape
         device = x.device
         
@@ -55,11 +52,8 @@ class DoubleTrajGRUBlock(nn.Module):
         if h_prev2 is None:
             h_prev2 = torch.zeros(B, self.trajgru2.num_filter, H, W, device=device, dtype=x.dtype)
         
-        # Process through first TrajGRU
         outputs1, state1 = self.trajgru1(x.unsqueeze(0), h_prev1, seq_len=1)
         h1 = state1
-        
-        # Process through second TrajGRU 
         outputs2, state2 = self.trajgru2(h1.unsqueeze(0), h_prev2, seq_len=1)
         h2 = state2
         
@@ -69,8 +63,6 @@ class DoubleTrajGRUBlock(nn.Module):
 class Down(nn.Module):
     """
     2D Downscaling block with Double TrajGRU.
-    
-    Applies max pooling followed by Double TrajGRU block for downsampling.
     
     Parameters
     ----------
@@ -93,17 +85,13 @@ class Down(nn.Module):
         )
 
     def forward(self, x, h_prev1=None, h_prev2=None):
-        # Max pooling first
         x_pooled = self.mpconv[0](x)
-        # Double TrajGRU
         return self.mpconv[1](x_pooled, h_prev1, h_prev2)
 
 
 class Up(nn.Module):
     """
     2D Upscaling block with Double TrajGRU.
-    
-    Applies transposed convolution for upsampling followed by Double TrajGRU block.
     
     Parameters
     ----------
@@ -127,7 +115,6 @@ class Up(nn.Module):
 
     def forward(self, x1, x2, h_prev1=None, h_prev2=None):
         x1 = self.up(x1)
-        # input is C,H,W
         diffY = x2.size()[2] - x1.size()[2]
         diffX = x2.size()[3] - x1.size()[3]
         x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
@@ -165,10 +152,8 @@ class UNetTrajGRU(nn.Module):
         self.seq_len = seq_len
         self.kernel = kernel
         
-        # Set default bottleneck if None
         if bottleneck_dims is None:
             bottleneck_dims = (base_ch*4,) 
-        # Ensure bottleneck_dims is a tuple/list
         if not isinstance(bottleneck_dims, (tuple, list)):
             bottleneck_dims = (bottleneck_dims,)
         
@@ -176,12 +161,10 @@ class UNetTrajGRU(nn.Module):
         self.L = L
         self.n_bottleneck_stages = len(bottleneck_dims)
         
-        # encoder 
         self.inc = DoubleTrajGRUBlock(in_ch, base_ch, kernel, L, seq_len)
         self.down1 = Down(base_ch, base_ch*2, kernel, L, seq_len)
         self.down2 = Down(base_ch*2, base_ch*4, kernel, L, seq_len)
         
-        #  bottleneck 
         bottleneck_layers = []
         in_channels = base_ch*4
         for width in bottleneck_dims:
@@ -189,11 +172,8 @@ class UNetTrajGRU(nn.Module):
             in_channels = width
         self.bottleneck = nn.ModuleList(bottleneck_layers)
         
-        # decoder with skip connections
         self.up1 = Up(in_channels, base_ch*2, base_ch*2, kernel, L, seq_len)
         self.up2 = Up(base_ch*2, base_ch, base_ch, kernel, L, seq_len)
-        
-        # Final output convolution
         self.outc = nn.Conv2d(base_ch, out_ch, 1)
 
     def forward(self, x):
