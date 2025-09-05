@@ -3,44 +3,54 @@
     "correct": 7,
     "early": 2,
     "late": 1,
-    "incorrect_initiations": 20,
-    "total_true": 19,
-    "total_pred": 30,
-    "correct_over_true": 0.3684210526315789,
-    "correct_over_pred": 0.23333333333333334,
-    "anytime_ratio": 0.5263157894736842,
-    "incorrect_initiation_ratio": 0.6666666666666666,
+    "incorrect_initiations": 22,
+    "total_true": 20,
+    "total_pred": 32,
+    "correct_over_true": 0.35,
+    "correct_over_pred": 0.21875,
+    "anytime_ratio": 0.5,
+    "incorrect_initiation_ratio": 0.6875,
     "statistics": {
       "correct": {
         "avg_area_km2": 31.45831310344636,
         "avg_duration_frames": 9.857142857142858,
-        "avg_pixels": 199.14285714285714,
+        "avg_pixels": 36.57142857142857,
         "storm_count": 7
       },
       "early": {
         "avg_area_km2": 15.659966713519122,
         "avg_duration_frames": 10.0,
-        "avg_pixels": 150.5,
+        "avg_pixels": 23.0,
         "storm_count": 2
       },
       "late": {
         "avg_area_km2": 73.27328532185194,
         "avg_duration_frames": 16.0,
-        "avg_pixels": 151.0,
+        "avg_pixels": 74.0,
         "storm_count": 1
       },
       "incorrect_initiations": {
-        "avg_area_km2": 46.29485840914959,
-        "avg_duration_frames": 12.05,
-        "avg_pixels": 182.15,
-        "storm_count": 20
+        "avg_area_km2": 51.34133910828252,
+        "avg_duration_frames": 12.590909090909092,
+        "avg_pixels": 72.5,
+        "storm_count": 22
       },
       "true_storms": {
-        "avg_area_km2": 58.46198495711507,
-        "avg_duration_frames": 14.052631578947368,
-        "avg_pixels": 216.05263157894737,
-        "storm_count": 19
+        "avg_area_km2": 64.94730120829124,
+        "avg_duration_frames": 14.35,
+        "avg_pixels": 71.95,
+        "storm_count": 20
       }
+    },
+    "incorrect_initiation_reflectivity_analysis": {
+      "description": "Analysis of high-reflectivity pixels in predicted storm areas and corresponding true data locations.",
+      "true_reflectivity_above_40": 4,
+      "true_reflectivity_35_40": 11,
+      "true_reflectivity_30_35": 6,
+      "true_reflectivity_below_30": 1,
+      "avg_predicted_reflectivity_above_45": 48.03031921386719,
+      "avg_actual_reflectivity_corresponding": 36.845890045166016,
+      "reflectivity_difference": 11.184429168701172
     }
   },
   "forecasting_metrics": {
