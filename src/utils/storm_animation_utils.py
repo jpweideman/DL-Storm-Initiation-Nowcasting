@@ -36,7 +36,6 @@ def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dil
     plt.colorbar(img, ax=ax, label="Reflectivity (dBZ)")
     title = ax.set_title("Radar Reflectivity - Time Step 1")
     storm_lines = []
-    # Pixel areas for the radar geometry
     pixel_areas = compute_polar_pixel_areas(data.shape[1:])
     
     def update(frame):
@@ -91,10 +90,10 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
     matplotlib.animation.FuncAnimation
         Animation object.
     """
-    T, H, W = data.shape  # H=azimuth_bins, W=range_bins
-    theta = np.linspace(0, 2 * np.pi, H, endpoint=False)  # Azimuth angles
-    r = np.arange(W) * 0.5  # Range in km (500m intervals)
-    theta_grid, r_grid = np.meshgrid(theta, r, indexing='ij')  # (azimuth_bins, range_bins)
+    T, H, W = data.shape 
+    theta = np.linspace(0, 2 * np.pi, H, endpoint=False)  
+    r = np.arange(W) * 0.5  
+    theta_grid, r_grid = np.meshgrid(theta, r, indexing='ij') 
     fig, ax = plt.subplots(subplot_kw={'projection': 'polar'}, figsize=figsize)
     ax.set_ylim(0, W * 0.5)
     norm = Normalize(vmin=0, vmax=80)
@@ -107,7 +106,6 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
     cbar.set_label('Reflectivity (dBZ)')
     ax.legend(handles=[storm_patch], loc='upper right', bbox_to_anchor=(1.1, 1.1))
     
-    # Compute pixel areas for the radar geometry
     pixel_areas = compute_polar_pixel_areas(data.shape[1:])
     
     def update(frame):
@@ -122,15 +120,12 @@ def animate_storms_polar(data, storm_threshold=45, area_threshold_km2=10.0,
         dilated_mask = binary_dilation(mask, iterations=dilation_iterations)
         contours = find_contours(dilated_mask.astype(float), 0.5)
         for contour in contours:
-            # Use the same logic as the working animate_storms function
-            path = Path(contour[:, ::-1])  # Same as working function
+            path = Path(contour[:, ::-1]) 
             
-
-            xg, yg = np.meshgrid(np.arange(W), np.arange(H))  # W=range_bins, H=azimuth_bins
+            xg, yg = np.meshgrid(np.arange(W), np.arange(H))  
             coords = np.vstack((xg.ravel(), yg.ravel())).T
-            inside = path.contains_points(coords).reshape((H, W))  # (azimuth_bins, range_bins)
+            inside = path.contains_points(coords).reshape((H, W)) 
             
-
             storm_pixels = mask & inside
             physical_area = np.sum(pixel_areas * storm_pixels)
             if physical_area >= area_threshold_km2:
@@ -171,10 +166,10 @@ def animate_storms_polar_comparison(true_data, pred_data, storm_threshold=45, ar
         Animation object.
     """
     assert true_data.shape == pred_data.shape, "Input arrays must have the same shape."
-    T, H, W = true_data.shape  # H=azimuth_bins, W=range_bins
-    theta = np.linspace(0, 2*np.pi, H, endpoint=False)  # Azimuth angles
-    r = np.arange(W) * 0.5  # Range in km (500m intervals)
-    theta_grid, r_grid = np.meshgrid(theta, r, indexing='ij')  # (azimuth_bins, range_bins)
+    T, H, W = true_data.shape 
+    theta = np.linspace(0, 2*np.pi, H, endpoint=False)  
+    r = np.arange(W) * 0.5  
+    theta_grid, r_grid = np.meshgrid(theta, r, indexing='ij')  
     fig, axs = plt.subplots(1, 2, subplot_kw={'projection': 'polar'}, figsize=figsize)
     for ax in axs:
         ax.set_ylim(0, W * 0.5)
@@ -194,7 +189,6 @@ def animate_storms_polar_comparison(true_data, pred_data, storm_threshold=45, ar
     storm_patch = mpatches.Patch(color='red', label='Detected Storm')
     axs[1].legend(handles=[storm_patch], loc='upper right', bbox_to_anchor=(1.1, 1.1))
     
-    # Compute pixel areas for the radar geometry
     pixel_areas = compute_polar_pixel_areas(true_data.shape[1:])
     
     def update(frame):
@@ -210,15 +204,12 @@ def animate_storms_polar_comparison(true_data, pred_data, storm_threshold=45, ar
             dilated_mask = binary_dilation(mask, iterations=dilation_iterations)
             contours = find_contours(dilated_mask.astype(float), 0.5)
             for contour in contours:
-                # Use the same logic as the working animate_storms function
-                path = Path(contour[:, ::-1])  # Same as working function
+                path = Path(contour[:, ::-1])  
                 
-    
-                xg, yg = np.meshgrid(np.arange(W), np.arange(H))  # W=range_bins, H=azimuth_bins
+                xg, yg = np.meshgrid(np.arange(W), np.arange(H))  
                 coords = np.vstack((xg.ravel(), yg.ravel())).T
-                inside = path.contains_points(coords).reshape((H, W))  # (azimuth_bins, range_bins)
+                inside = path.contains_points(coords).reshape((H, W))  
                 
-    
                 storm_pixels = mask & inside
                 physical_area = np.sum(pixel_areas * storm_pixels)
                 if physical_area >= area_threshold_km2:
@@ -284,7 +275,6 @@ def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0,
             dilation_iterations, overlap_threshold, use_displacement_prediction=False
         )
     
-    # Handle different return types from detect_new_storm_formations
     if isinstance(new_storms_result, tuple):
         new_storms_result = new_storms_result[0]
     
@@ -359,14 +349,11 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     title = ax.set_title("Displacement-Based New Storm Detection - Time Step 1")
     colorbar = plt.colorbar(img, ax=ax, label="Reflectivity (dBZ)")
     
- 
     ax.set_xlim(0, data.shape[2])
     ax.set_ylim(data.shape[1], 0)
     
-
     storm_results = detect_storms(data, reflectivity_threshold, area_threshold_km2, dilation_iterations)
     
-
     result = detect_new_storm_formations(
         data, reflectivity_threshold, area_threshold_km2, 
         dilation_iterations, overlap_threshold, use_displacement_prediction=True,
@@ -374,7 +361,6 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
         patch_thresh=patch_thresh, patch_frac=patch_frac, maxv=maxv
     )
     
-    # detect_new_storm_formations always returns displacement data when use_displacement_prediction=True
     new_storms_result, displacement_fields, selected_patch_centers, quality_scores = result
     
     storm_lines = []
@@ -399,24 +385,20 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
         img.set_data(frame)
         title.set_text(f"Displacement-Based New Storm Detection - Time Step {frame_id+1}")
         
-
         current_storms = storm_results[frame_id]
         current_masks = current_storms['storm_masks']
         current_coords = current_storms['storm_coordinates']
         
-
         for contour in current_coords:
             contour = np.array(contour)
             line, = ax.plot(contour[:, 0], contour[:, 1], color='red', linewidth=2)
             storm_lines.append(line)
         
-
         if frame_id > 0 and len(storm_results[frame_id-1]['storm_masks']) > 0:
             displacement_field = displacement_fields[frame_id-1]
             previous_masks = storm_results[frame_id-1]['storm_masks']
             predicted_masks = predict_storm_positions(previous_masks, displacement_field, data.shape[1:])
             
-
             for pred_mask in predicted_masks:
                 contours = find_contours(pred_mask.astype(float), 0.5)
                 for contour in contours:
@@ -424,20 +406,18 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                                   linewidth=2, linestyle='--')
                     predicted_lines.append(line)
         
- 
         frame_entry = next((f for f in new_storms_result if f["time_step"] == frame_id), None)
         if frame_entry and frame_entry["new_storm_count"] > 0:
             for contour in frame_entry["new_storm_coordinates"]:
                 contour = np.array(contour)
                 line, = ax.plot(contour[:, 0], contour[:, 1], color='lime', linewidth=2)
                 new_storm_lines.append(line)
-        
 
         if frame_id > 0 and frame_id-1 < len(selected_patch_centers):
             displacement_field = displacement_fields[frame_id-1]
             patch_centers = selected_patch_centers[frame_id-1]
             step = 5  # Arrow grid density
-            scale_factor = 4.5  # Make arrows 4.5 times longer than the actual displacement
+            scale_factor = 4.5  # Make arrows scale_factor times longer than the actual displacement
             min_arrow_length = 3.0
             
 
@@ -449,24 +429,19 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                 x_end = min(x_start + patch_size, data.shape[2])
                 patch_mask[y_start:y_end, x_start:x_end] = True
 
-
-            step = 15  # Arrow grid density
-            scale_factor = 3  # Make arrows 4.5 times longer than the actual displacement
+            step = 15  
+            scale_factor = 3  
             min_arrow_length = 3.0
-            
-            # Loop over a global grid to ensure equal gaps on all borders
 
             y_steps = (data.shape[1] - 1) // step
             x_steps = (data.shape[2] - 1) // step
             
-
             y_start = (data.shape[1] - 1 - (y_steps * step)) // 2
             x_start = (data.shape[2] - 1 - (x_steps * step)) // 2
             
             for y in range(y_start, data.shape[1], step):
                 for x in range(x_start, data.shape[2], step):
                     if patch_mask[y, x]:
-                        # Real displacement arrow
                         u = displacement_field[y, x, 0]
                         v = displacement_field[y, x, 1]
                         u_scaled = u * scale_factor
@@ -475,17 +450,14 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                             u_scaled = np.sign(u_scaled) * min_arrow_length
                         if abs(v_scaled) < min_arrow_length:
                             v_scaled = np.sign(v_scaled) * min_arrow_length
-                        # Clip arrow tips to stay within image bounds
-                        max_u = data.shape[2] - 1 - x  # Maximum u that keeps arrow within bounds
-                        max_v = data.shape[1] - 1 - y  # Maximum v that keeps arrow within bounds
-                        min_u = -x  # Minimum u that keeps arrow within bounds
-                        min_v = -y  # Minimum v that keeps arrow within bounds
+                        max_u = data.shape[2] - 1 - x  
+                        max_v = data.shape[1] - 1 - y  
+                        min_u = -x  
+                        min_v = -y  
                         
-                        # Clip the scaled components to stay within bounds
                         u_scaled_clipped = np.clip(u_scaled, min_u, max_u)
                         v_scaled_clipped = np.clip(v_scaled, min_v, max_v)
                         
-                        # Always plot the arrow (guaranteed to be within bounds)
                         arrow = ax.arrow(x, y, u_scaled_clipped, v_scaled_clipped,
                                          head_width=1.5, head_length=1.5,
                                          fc='red', ec='red', alpha=0.8, linewidth=1)
@@ -495,8 +467,6 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                         marker = ax.plot(x, y, marker='>', color='red', markersize=1.5, alpha=0.8, linewidth=0)[0]
                         wind_arrows.append(marker)
                         
-
-        
         if frame_id == 0:
             from matplotlib.lines import Line2D
             legend_elements = [
@@ -506,8 +476,6 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
                 Line2D([0], [0], color='red', lw=1, marker='>', markersize=8, label='Displacement Vectors')
             ]
             ax.legend(handles=legend_elements, loc='upper right')
-        
-
         
         return [img, title] + storm_lines + predicted_lines + new_storm_lines + wind_arrows
     
