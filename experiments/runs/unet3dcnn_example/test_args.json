@@ -9,8 +9,8 @@
   "base_ch": 64,
   "bottleneck_dims": "(32,)",
   "kernel_size": 3,
-  "which": "best",
-  "device": "cpu",
+  "which": "latest",
+  "device": "cuda",
   "save_arrays": true,
   "predictions_dir": "predictions/unet3dcnn_example"
 }
