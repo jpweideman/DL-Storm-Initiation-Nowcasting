@@ -306,7 +306,7 @@ def animate_new_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0,
     return ani 
 
 def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold_km2=10.0, 
-                                dilation_iterations=5, overlap_threshold=0.1, interval=200,
+                                dilation_iterations=5, overlap_threshold=0.2, interval=200,
                                 patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, 
                                 maxv=85.0):
     """
@@ -323,7 +323,7 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     dilation_iterations : int, optional
         Dilation iterations for storm smoothing (default: 5).
     overlap_threshold : float, optional
-        Overlap threshold for new storm detection (default: 0.1).
+        Overlap threshold for new storm detection (default: 0.2).
     interval : int, optional
         Animation interval in milliseconds (default: 200).
     patch_size : int, optional
