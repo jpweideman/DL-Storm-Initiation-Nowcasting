@@ -55,7 +55,7 @@ pip install -r requirements.txt
        --batch_size 4 \
        --epochs 15 \
        --device cpu \ 
-       --loss_name b_mse \
+       --loss_name weighted_mse \
        --train_val_test_split "(0.5,0.1,0.4)" \
        --early_stopping_patience 10 \
        --no_wandb
