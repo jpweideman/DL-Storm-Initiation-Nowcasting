@@ -8,7 +8,7 @@ class TrajGRUCell(nn.Module):
     """
     Trajectory GRU (TrajGRU) recurrent cell with flow-based warping.
 
-    This implementation mirrors the design used in the Hzzone Precipitation-Nowcasting repository.
+    This implementation mirrors architecture used in https://github.com/Hzzone/Precipitation-Nowcasting repository.
 
     Parameters
     ----------
