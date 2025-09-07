@@ -69,12 +69,10 @@ def compute_b_mse(pred, target, maxv=85.0, eps=1e-6):
     float
         B-MSE value.
     """
-    # Convert from normalized scale to dBZ if needed
     if pred.max() <= 1.0 and target.max() <= 1.0:
         pred = pred * (maxv + eps)
         target = target * (maxv + eps)
     
-    # Set weights based on dBZ values 
     w = np.ones_like(target, dtype=np.float32)  
 
     w = np.where(target < 2, 1.0, w)
@@ -84,7 +82,6 @@ def compute_b_mse(pred, target, maxv=85.0, eps=1e-6):
     w = np.where((target >= 30) & (target < 45), 30.0, w)
     w = np.where(target >= 45, 45.0, w)
     
-    # Calculate  B-MSE
     b_mse = np.mean(w * (pred - target) ** 2)
     return b_mse
 
@@ -111,7 +108,7 @@ def compute_forecasting_metrics(pred, target, maxv=85.0, eps=1e-6):
         - 'csi_by_threshold': CSI scores for thresholds [2, 5, 10, 30, 45] dBZ
         - 'hss_by_threshold': HSS scores for thresholds [2, 5, 10, 30, 45] dBZ
     """
-    # Convert to dBZ if needed 
+
     pred_dBZ = pred.copy()
     target_dBZ = target.copy()
     if pred.max() <= 1.0 and target.max() <= 1.0:
@@ -403,7 +400,7 @@ def calculate_contour_overlap(contour1, contour2, data_shape=None):
         print(f"Warning: Error calculating contour overlap: {e}")
         return 0.0
 
-def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, max_displacement=100, min_correlation_quality=0.5):
+def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, overlap_threshold=0.2, storm_tracking_overlap_threshold=0.2, use_displacement_prediction=True, patch_size=32, patch_stride=16, patch_thresh=35.0, patch_frac=0.015, maxv=85.0, max_displacement=100, min_correlation_quality=0.5, show_progress=True):
     """
     Detect new storm formations using displacement-based prediction or simple overlap tracking.
     
@@ -467,22 +464,20 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
     new_storms_summary = []
 
     if use_displacement_prediction and len(data) > 1:
-        # Compute displacement vectors
-        displacement_vectors, displacement_fields, selected_patch_centers, quality_scores = compute_displacement_vectors(
-            data, 
-            patch_size=patch_size,
-            patch_stride=patch_stride,
-            max_displacement=max_displacement,
-            patch_thresh=patch_thresh,
-            patch_frac=patch_frac,
-            maxv=maxv,
-            min_correlation_quality=min_correlation_quality,
-            show_progress=True
-        )
+        T = len(data)
+        displacement_vectors = np.zeros((T-1, 2))
+        quality_scores = np.zeros(T-1)
+        selected_patch_centers = []
+        displacement_fields = [None] * (T-1)
         
         previous_masks = []
         
-        for t, frame_result in enumerate(storm_results):
+        if show_progress:
+            t_range = tqdm(enumerate(storm_results), desc="Processing storm formations with displacement", total=len(storm_results))
+        else:
+            t_range = enumerate(storm_results)
+        
+        for t, frame_result in t_range:
             new_count = 0
             new_coords = []
             current_masks = frame_result['storm_masks']
@@ -493,7 +488,19 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
 
             if t > 0 and len(previous_masks) > 0:
                 # Predict where previous storms should be based on displacement field
-                displacement_field = displacement_fields[t-1]
+                displacement_field = compute_single_displacement_field(data, t-1, 
+                    patch_size=patch_size,
+                    patch_stride=patch_stride,
+                    max_displacement=max_displacement,
+                    patch_thresh=patch_thresh,
+                    patch_frac=patch_frac,
+                    maxv=maxv,
+                    min_correlation_quality=min_correlation_quality,
+                    displacement_vectors=displacement_vectors,
+                    quality_scores=quality_scores,
+                    selected_patch_centers=selected_patch_centers
+                )
+                displacement_fields[t-1] = displacement_field
                 predicted_masks = predict_storm_positions(previous_masks, displacement_field, data.shape[1:])
                 
                 # Check current storms against predictions
@@ -602,15 +609,15 @@ def detect_new_storm_formations(data, reflectivity_threshold=45, area_threshold_
                 'storm_durations_frames': new_durations
             })
             
-            # Update for next iteration
             previous_masks = current_masks
         
         return new_storms_summary
 
-def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displacement=100, show_progress=True, 
-                                patch_thresh=35.0, patch_frac=0.015, maxv=85.0, min_correlation_quality=0.50):
+def compute_single_displacement_field(data, t, patch_size=32, patch_stride=16, max_displacement=100, 
+                                    patch_thresh=35.0, patch_frac=0.015, maxv=85.0, min_correlation_quality=0.50,
+                                    displacement_vectors=None, quality_scores=None, selected_patch_centers=None):
     """
-    Compute displacement vectors and fields using patch-based cross-correlation.
+    Compute displacement vectors and fields using patch-based cross-correlation for a single time step.
     
     This function calculates how radar echoes move between consecutive frames.
     
@@ -628,15 +635,15 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
     Parameters
     ----------
     data : np.ndarray
-        Radar reflectivity data of shape (T, H, W) where T=time, H=height, W=width.
+        Radar reflectivity data of shape (T, H, W).
+    t : int
+        Time step index (0 to T-2).
     patch_size : int, optional
         Size of patches for cross-correlation in pixels (default: 32).
     patch_stride : int, optional
         Stride between patch centers in pixels (default: 16).
     max_displacement : int, optional
         Maximum allowed displacement magnitude in pixels (default: 100).
-    show_progress : bool, optional
-        Whether to show progress bar (default: True).
     patch_thresh : float, optional
         Minimum reflectivity threshold for patch selection in dBZ (default: 35.0).
     patch_frac : float, optional
@@ -648,184 +655,166 @@ def compute_displacement_vectors(data, patch_size=32, patch_stride=16, max_displ
     
     Returns
     -------
-    tuple
-        - displacement_vectors: np.ndarray of shape (T-1, 2) - Global average displacement (u, v) for each time step
-        - displacement_fields: np.ndarray of shape (T-1, H, W, 2) - Dense displacement field for every pixel
-        - selected_patch_centers: list of lists - Patch center coordinates used for each time step
-        - quality_scores: np.ndarray of shape (T-1,) - Quality scores based on displacement consistency
+    np.ndarray
+        Displacement field of shape (H, W, 2) for time step t.
     """
     T, H, W = data.shape
     
-    # Calculate number of patches to cover the entire image
-    # Ensure patches extend to cover the full image, even if some patches go beyond boundaries
+    if t >= T - 1:
+        return np.zeros((H, W, 2))
+    
     n_patches_y = max(1, (H - 1) // patch_stride + 1)
     n_patches_x = max(1, (W - 1) // patch_stride + 1)
     
-    # Normalize patch_thresh for internal use if patching is used
     patch_thresh_normalized = patch_thresh / (maxv + 1e-6)
     
-    displacement_vectors = np.zeros((T-1, 2))  
-    displacement_fields = np.zeros((T-1, H, W, 2)) 
-    selected_patch_centers = [] 
-    quality_scores = np.zeros(T-1) 
-    
-    # Quality filtering helper function
+    # Quality filtering helper function 
     def compute_correlation_quality(correlation, peak_y, peak_x):
         """Compute correlation quality as ratio of peak to maximum possible correlation."""
         max_correlation = correlation.max()
         if max_correlation > 0:
             return correlation[peak_y, peak_x] / max_correlation
         return 0.0
-
-    if show_progress:
-        t_range = tqdm(range(T-1), desc="Computing displacement vectors")
+    
+    frame1 = data[t]
+    frame2 = data[t+1]
+    
+    patch_displacements = []
+    patch_positions = []
+    
+    for i in range(n_patches_y):
+        for j in range(n_patches_x):
+            # Get patch positions
+            y_start = i * patch_stride
+            x_start = j * patch_stride
+            y_end = y_start + patch_size
+            x_end = x_start + patch_size
+            
+            # Get patch center
+            patch_center_y = y_start + patch_size // 2
+            patch_center_x = x_start + patch_size // 2
+            
+            # Extract patches with padding
+            y_start_actual = max(0, y_start)
+            x_start_actual = max(0, x_start)
+            y_end_actual = min(H, y_end)
+            x_end_actual = min(W, x_end)
+            
+            # Extract data within bounds
+            patch1_data = frame1[y_start_actual:y_end_actual, x_start_actual:x_end_actual]
+            patch2_data = frame2[y_start_actual:y_end_actual, x_start_actual:x_end_actual]
+            
+            # Create full size patches
+            patch1 = np.zeros((patch_size, patch_size))
+            patch2 = np.zeros((patch_size, patch_size))
+            
+            # Get padding offsets
+            y_pad_start = max(0, -y_start)
+            x_pad_start = max(0, -x_start)
+            y_pad_end = patch_size - max(0, y_end - H)
+            x_pad_end = patch_size - max(0, x_end - W)
+            
+            # Fill patches with data
+            patch1[y_pad_start:y_pad_end, x_pad_start:x_pad_end] = patch1_data
+            patch2[y_pad_start:y_pad_end, x_pad_start:x_pad_end] = patch2_data
+            
+            # Skip low variation patches
+            if np.std(patch1) < 1e-6 or np.std(patch2) < 1e-6:
+                continue
+            
+            # High reflectivity patch selection
+            patch_normalized = np.maximum(patch1, 0) / (maxv + 1e-6)
+            total_pix = patch_normalized.size
+            n_above = (patch_normalized > patch_thresh_normalized).sum()
+            if n_above / total_pix < patch_frac:
+                continue
+            
+            # Normalize patches for better correlation
+            patch1_norm = (patch1 - np.mean(patch1)) / (np.std(patch1) + 1e-8)
+            patch2_norm = (patch2 - np.mean(patch2)) / (np.std(patch2) + 1e-8)
+            
+            # Correlation computation
+            correlation = correlate2d(patch1_norm, patch2_norm, mode='full')
+            
+            # Find the peak of correlation
+            center_y, center_x = correlation.shape[0] // 2, correlation.shape[1] // 2
+            
+            # Search within max_displacement range
+            y_start_search = max(0, center_y - max_displacement)
+            y_end_search = min(correlation.shape[0], center_y + max_displacement + 1)
+            x_start_search = max(0, center_x - max_displacement)
+            x_end_search = min(correlation.shape[1], center_x + max_displacement + 1)
+            
+            search_region = correlation[y_start_search:y_end_search, x_start_search:x_end_search]
+            
+            if search_region.size == 0:
+                continue
+                
+            max_idx = np.unravel_index(np.argmax(search_region), search_region.shape)
+            peak_y = y_start_search + max_idx[0]
+            peak_x = x_start_search + max_idx[1]
+            
+            # Calculate displacement to the new position for this patch
+            u = -(peak_x - center_x)  # horizontal displacement
+            v = -(peak_y - center_y)  # vertical displacement
+            
+            # Check displacement magnitude and reject if too large
+            displacement_magnitude = np.sqrt(u**2 + v**2)
+            if displacement_magnitude > max_displacement:
+                continue
+            
+            # Only use patches with good correlations
+            quality = compute_correlation_quality(correlation, peak_y, peak_x)
+            if quality < min_correlation_quality:
+                continue
+            
+            if np.isnan(u) or np.isinf(u) or np.isnan(v) or np.isinf(v):
+                continue
+            
+            patch_displacements.append([u, v])
+            patch_positions.append([patch_center_y, patch_center_x])
+    
+    # Calculate global displacement vector and apply temporal smoothing 
+    if len(patch_displacements) > 0:
+        patch_displacements = np.array(patch_displacements)
+        current_displacement = np.mean(patch_displacements, axis=0)
+        
+        # Apply temporal smoothing
+        if displacement_vectors is not None and t > 0:
+            # Weighted average with previous displacement
+            alpha = 0.7
+            displacement_vectors[t] = alpha * current_displacement + (1 - alpha) * displacement_vectors[t-1]
+        else:
+            displacement_vectors[t] = current_displacement
+        
+        # Compute quality score based on displacement consistency 
+        displacement_std = np.std(patch_displacements, axis=0)
+        displacement_magnitude = np.linalg.norm(displacement_vectors[t])
+        quality_scores[t] = 1.0 / (1.0 + np.mean(displacement_std) / (displacement_magnitude + 1e-6))
+        
+        # Store patch centers
+        if selected_patch_centers is not None:
+            selected_patch_centers.append(patch_positions)
+        
+        # Create displacement field
+        displacement_field = create_displacement_field(patch_displacements, patch_positions, (H, W), None, max_displacement)
     else:
-        t_range = range(T-1)
-    
-    for t in t_range:
-        frame1 = data[t]
-        frame2 = data[t+1]
-        
-        patch_displacements = []
-        patch_positions = []
-        time_step_patch_centers = []
-        
-        for i in range(n_patches_y):
-            for j in range(n_patches_x):
-                # Get patch positions
-                y_start = i * patch_stride
-                x_start = j * patch_stride
-                y_end = y_start + patch_size
-                x_end = x_start + patch_size
-                
-                # Get patch center
-                patch_center_y = y_start + patch_size // 2
-                patch_center_x = x_start + patch_size // 2
-                
-                # Extract patches with padding
-                y_start_actual = max(0, y_start)
-                x_start_actual = max(0, x_start)
-                y_end_actual = min(H, y_end)
-                x_end_actual = min(W, x_end)
-                
-                # Extract data within bounds
-                patch1_data = frame1[y_start_actual:y_end_actual, x_start_actual:x_end_actual]
-                patch2_data = frame2[y_start_actual:y_end_actual, x_start_actual:x_end_actual]
-                
-                # Create full size patches
-                patch1 = np.zeros((patch_size, patch_size))
-                patch2 = np.zeros((patch_size, patch_size))
-                
-                # Get padding offsets
-                y_pad_start = max(0, -y_start)
-                x_pad_start = max(0, -x_start)
-                y_pad_end = patch_size - max(0, y_end - H)
-                x_pad_end = patch_size - max(0, x_end - W)
-                
-                # Fill patches with data
-                patch1[y_pad_start:y_pad_end, x_pad_start:x_pad_end] = patch1_data
-                patch2[y_pad_start:y_pad_end, x_pad_start:x_pad_end] = patch2_data
-                
-                # Skip low variation patches
-                if np.std(patch1) < 1e-6 or np.std(patch2) < 1e-6:
-                    continue
-                
-                # High reflectivity patch selection
-                patch_normalized = np.maximum(patch1, 0) / (maxv + 1e-6)
-                total_pix = patch_normalized.size
-                n_above = (patch_normalized > patch_thresh_normalized).sum()
-                if n_above / total_pix < patch_frac:
-                    continue
-                
-                # Normalize patches for better correlation
-                patch1_norm = (patch1 - np.mean(patch1)) / (np.std(patch1) + 1e-8)
-                patch2_norm = (patch2 - np.mean(patch2)) / (np.std(patch2) + 1e-8)
-                
-                # Correlation computation
-                correlation = correlate2d(patch1_norm, patch2_norm, mode='full')
-                
-                # Find the peak of correlation
-                center_y, center_x = correlation.shape[0] // 2, correlation.shape[1] // 2
-                
-                # Search within max_displacement range
-                y_start_search = max(0, center_y - max_displacement)
-                y_end_search = min(correlation.shape[0], center_y + max_displacement + 1)
-                x_start_search = max(0, center_x - max_displacement)
-                x_end_search = min(correlation.shape[1], center_x + max_displacement + 1)
-                
-                search_region = correlation[y_start_search:y_end_search, x_start_search:x_end_search]
-                
-                if search_region.size == 0:
-                    continue
-                    
-                max_idx = np.unravel_index(np.argmax(search_region), search_region.shape)
-                peak_y = y_start_search + max_idx[0]
-                peak_x = x_start_search + max_idx[1]
-                
-                # Calculate displacement to the new position for this patch
-                u = -(peak_x - center_x)  # horizontal displacement
-                v = -(peak_y - center_y)  # vertical displacement
-                
-                # Check displacement magnitude and reject if too large
-                displacement_magnitude = np.sqrt(u**2 + v**2)
-                if displacement_magnitude > max_displacement:
-                    continue
-                
-                # Only use patches with good correlations
-                quality = compute_correlation_quality(correlation, peak_y, peak_x)
-                if quality < min_correlation_quality:
-                    continue
-                
-                if np.isnan(u) or np.isinf(u) or np.isnan(v) or np.isinf(v):
-                    continue
-                
-                patch_displacements.append([u, v])
-                patch_positions.append([patch_center_y, patch_center_x])
-                time_step_patch_centers.append([patch_center_y, patch_center_x])
-        
-        selected_patch_centers.append(time_step_patch_centers)
-        
-        # Calculate global displacement vector
-        if len(patch_displacements) > 0:
-            patch_displacements = np.array(patch_displacements)
-            current_displacement = np.mean(patch_displacements, axis=0)
-            
-            # Apply temporal smoothing
-            if t > 0:
-                # Weighted average with previous displacement
-                alpha = 0.7
-                displacement_vectors[t] = alpha * current_displacement + (1 - alpha) * displacement_vectors[t-1]
-            else:
-                displacement_vectors[t] = current_displacement
-            
-
-
-            displacement_std = np.std(patch_displacements, axis=0)
-            displacement_magnitude = np.linalg.norm(displacement_vectors[t])
-            quality_scores[t] = 1.0 / (1.0 + np.mean(displacement_std) / (displacement_magnitude + 1e-6))
+        # Handle no patches case 
+        if displacement_vectors is not None and t > 0:
+            displacement_vectors[t] = displacement_vectors[t-1]
+            quality_scores[t] = 0.5
         else:
-
-            if t > 0:
-                displacement_vectors[t] = displacement_vectors[t-1]
-                quality_scores[t] = 0.5
-            else:
-                displacement_vectors[t] = [0.0, 0.0]
-                quality_scores[t] = 0.0
+            displacement_vectors[t] = np.array([0.0, 0.0])
+            quality_scores[t] = 0.0
         
-
-        if len(patch_displacements) > 0:
-
-            previous_field = displacement_fields[t-1] if t > 0 else None
-            displacement_fields[t] = create_displacement_field(patch_displacements, patch_positions, (H, W), previous_field, max_displacement)
-        else:
-
-            if t > 0:
-
-                displacement_fields[t] = np.full((H, W, 2), displacement_vectors[t])
-            else:
-                displacement_fields[t] = np.zeros((H, W, 2))
+        # Store empty patch centers
+        if selected_patch_centers is not None:
+            selected_patch_centers.append([])
+        
+        # Create uniform displacement field using temporally smoothed vector
+        displacement_field = np.full((H, W, 2), displacement_vectors[t])
     
-    return displacement_vectors, displacement_fields, selected_patch_centers, quality_scores
+    return displacement_field
 
 def create_displacement_field(patch_displacements, patch_positions, field_shape, previous_displacement_field=None, max_displacement=100):
     """
@@ -970,19 +959,15 @@ def predict_storm_positions(previous_storms, displacement_field, data_shape):
         new_y = y_coords + storm_displacement_v
         new_x = x_coords + storm_displacement_u
         
-        # Check for invalid values
         if np.any(np.isnan(new_y)) or np.any(np.isnan(new_x)) or np.any(np.isinf(new_y)) or np.any(np.isinf(new_x)):
             continue
             
-
         new_y = np.clip(new_y, 0, H-1).astype(int)
         new_x = np.clip(new_x, 0, W-1).astype(int)
         
-
         predicted_mask = np.zeros((H, W), dtype=bool)
         predicted_mask[new_y, new_x] = True
         
-
         predicted_mask = binary_dilation(predicted_mask, iterations=2)
         
         predicted_masks.append(predicted_mask)
@@ -1185,12 +1170,10 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
                         continue
                     found = True
                     if arr.ndim == 1 and arr.shape[0] == 2:
-                        # Single point
                         x, y = arr[0], arr[1]
                         max_x = max(max_x, int(x))
                         max_y = max(max_y, int(y))
                     elif arr.ndim == 2 and arr.shape[1] == 2:
-                        # Contour
                         max_x = max(max_x, int(arr[:, 0].max()))
                         max_y = max(max_y, int(arr[:, 1].max()))
         if not found:
@@ -1226,7 +1209,6 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     matched_pred = set() 
     matched_true = set() 
     
-
     correct_areas = []
     correct_durations = []
     correct_pixels = []
@@ -1242,7 +1224,6 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
     true_storm_areas = []
     true_storm_durations = []
     true_storm_pixels = []
-
 
     for t, true_storms in true_lookup.items():
         for i, true_storm in enumerate(true_storms):
@@ -1332,7 +1313,6 @@ def evaluate_new_storm_predictions(new_storms_pred, new_storms_true, overlap_thr
 
     total_true = sum(len(v) for v in true_lookup.values())
     total_pred = sum(len(v) for v in pred_lookup.values())
-
 
     correct_over_true = correct / total_true if total_true > 0 else 0.0
     correct_over_pred = correct / total_pred if total_pred > 0 else 0.0
@@ -1512,8 +1492,7 @@ if __name__ == "__main__":
  
         use_disp = kwargs.get('use_displacement_prediction', False)
         method = "with displacement tracking" if use_disp else "with overlap tracking"
-        print(f" {desc} - Computing new storm formations {method}")
-        return detect_new_storm_formations(data, **{k: v for k, v in kwargs.items() if k != 'desc'})
+        return detect_new_storm_formations(data, **{k: v for k, v in kwargs.items() if k != 'desc'}, show_progress=True)
 
 
     use_displacement_prediction = args.use_displacement_prediction and not args.no_displacement_prediction
@@ -1574,8 +1553,8 @@ if __name__ == "__main__":
 
 
     if use_displacement_prediction and len(pred_composite) > 1:
-        pred_storms, pred_displacement_fields, pred_patch_centers, pred_quality_scores = pred_result
-        tgt_storms, tgt_displacement_fields, tgt_patch_centers, tgt_quality_scores = tgt_result
+        pred_storms, _, pred_patch_centers, pred_quality_scores = pred_result
+        tgt_storms, _, tgt_patch_centers, tgt_quality_scores = tgt_result
     else:
         pred_storms = pred_result
         tgt_storms = tgt_result
