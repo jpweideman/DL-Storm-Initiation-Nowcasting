@@ -1,6 +1,5 @@
 import sys
 from pathlib import Path
-# Add the project root directory to Python path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
 import argparse
@@ -14,14 +13,16 @@ from tqdm import tqdm
 import ast
 
 from src.models.cnn_3d import CNN3D
-# Import utilities
 from src.training.utils import set_seed, atomic_save, mse_loss, weighted_mse_loss, b_mse_loss
-# Import dataloaders
 from src.training.utils import RadarWindowDataset, PatchRadarWindowDataset
+from src.training.utils.training_utils import (
+    init_forecasting_metrics_accumulator,
+    accumulate_forecasting_metrics_batch,
+    compute_final_forecasting_metrics,
+)
 
 set_seed(123)
 
-# Training function
 def train_radar_model(
     npy_path: str,
     save_dir: str,
@@ -104,7 +105,7 @@ def train_radar_model(
     save_dir = Path(save_dir)
     save_dir.mkdir(parents=True, exist_ok=True)
 
-    # load & sanitize (memory-mapped)
+    # memmory mapped loading
     cube = np.load(npy_path, mmap_mode='r')
     T,C,H,W = cube.shape
     print(f"Loaded {npy_path} → {cube.shape}")
@@ -215,25 +216,12 @@ def train_radar_model(
         tot=0.0
         
         if not train:
-            # Initialize running statistics for batch-by-batch metric computation
             import numpy as np
-            from src.utils.storm_utils import compute_forecasting_metrics
             
-
             ranges = [(0, 20), (20, 35), (35, 45), (45, 100)]
             mse_by_range = {f"mse_{r_min}_{r_max}": {"sum": 0.0, "count": 0} for r_min, r_max in ranges}
             
-
-            total_mse_sum = 0.0
-            total_pixels = 0
-            
-
-            total_b_mse = 0.0
-            total_samples = 0
-            total_csi = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
-            total_hss = {2: 0.0, 5: 0.0, 10: 0.0, 30: 0.0, 45: 0.0}
-            total_csi_count = 0
-            total_hss_count = 0
+            metrics_accumulator = init_forecasting_metrics_accumulator()
         
         with torch.set_grad_enabled(train):
             for batch in tqdm(dl, desc=("Train" if train else "Val"), leave=False):
@@ -249,18 +237,19 @@ def train_radar_model(
                 tot += loss.item()*xb.size(0)
                 
                 if not train:
+                    metrics_accumulator = accumulate_forecasting_metrics_batch(
+                        metrics_accumulator, pred.detach(), yb.detach(), maxv=maxv, eps=eps
+                    )
 
-                    maxv = 85.0 + 1e-6  # Use same maxv as b_mse_loss function to match normalization
-                    pred_dBZ = pred.detach() * maxv
-                    target_dBZ = yb.detach() * maxv
+                    maxv_loc = maxv + eps  
+                    pred_dBZ = pred.detach() * maxv_loc
+                    target_dBZ = yb.detach() * maxv_loc
                     
-
                     if pred_dBZ.shape != target_dBZ.shape:
 
                         pred_dBZ = pred_dBZ.squeeze()
                         target_dBZ = target_dBZ.squeeze()
-                    
-
+                
                     for r_min, r_max in ranges:
                         mask = (target_dBZ >= r_min) & (target_dBZ < r_max)
                         n_pix = torch.sum(mask).item()
@@ -268,36 +257,9 @@ def train_radar_model(
                             mse_bin = torch.sum(((pred_dBZ[mask] - target_dBZ[mask]) ** 2)).item()
                             mse_by_range[f"mse_{r_min}_{r_max}"]["sum"] += mse_bin
                             mse_by_range[f"mse_{r_min}_{r_max}"]["count"] += n_pix
-                    
-
-                    batch_mse = torch.sum(((pred_dBZ - target_dBZ) ** 2)).item()
-                    total_mse_sum += batch_mse
-                    total_pixels += pred_dBZ.numel()
-                    
-
-                    batch_metrics = compute_forecasting_metrics(
-                        pred.detach().cpu().numpy(), 
-                        yb.detach().cpu().numpy(),
-                        maxv=maxv, 
-                        eps=eps
-                    )
-                    
-
-                    total_b_mse += batch_metrics['b_mse'] * xb.size(0)
-                    total_samples += xb.size(0)
-                    
-
-                    for th in total_csi:
-                        csi_key = f"csi_{th}"
-                        hss_key = f"hss_{th}"
-                        if csi_key in batch_metrics['csi_by_threshold']:
-                            total_csi[th] += batch_metrics['csi_by_threshold'][csi_key]
-                            total_hss[th] += batch_metrics['hss_by_threshold'][hss_key]
-                    
-                    total_csi_count += 1
-                    total_hss_count += 1
         
         if not train:
+            global_metrics = compute_final_forecasting_metrics(metrics_accumulator)
 
             final_mse_by_range = {}
             for range_name, stats in mse_by_range.items():
@@ -307,17 +269,13 @@ def train_radar_model(
                     final_mse_by_range[range_name] = np.nan
             
 
-            final_mse = total_mse_sum / total_pixels if total_pixels > 0 else np.nan
-            
-
-            final_storm_metrics = {}
-            if total_samples > 0:
-                final_storm_metrics['b_mse'] = total_b_mse / total_samples
-                final_storm_metrics['csi_by_threshold'] = {}
-                final_storm_metrics['hss_by_threshold'] = {}
-                for th in total_csi:
-                    final_storm_metrics['csi_by_threshold'][f"csi_{th}"] = total_csi[th] / total_csi_count
-                    final_storm_metrics['hss_by_threshold'][f"hss_{th}"] = total_hss[th] / total_hss_count
+            final_storm_metrics = {
+                'b_mse': global_metrics['b_mse'],
+                'mse': global_metrics['mse'],
+                'csi_by_threshold': global_metrics['csi_by_threshold'],
+                'hss_by_threshold': global_metrics['hss_by_threshold'],
+                'confusion_by_threshold': global_metrics['confusion_by_threshold']
+            }
             
             print("Validation metrics:")
             print(f"  B-MSE: {final_storm_metrics['b_mse']:.4f}")
@@ -325,7 +283,7 @@ def train_radar_model(
                 print(f"  CSI {th}: {csi:.4f}")
             for th, hss in final_storm_metrics['hss_by_threshold'].items():
                 print(f"  HSS {th}: {hss:.4f}")
-            print(f"  MSE: {final_mse:.4f}")
+            print(f"  MSE: {final_storm_metrics['mse']:.4f}")
             for range_name, mse_val in final_mse_by_range.items():
                 print(f"  {range_name}: {mse_val:.4f}")
             
@@ -333,15 +291,15 @@ def train_radar_model(
                 wandb.log({**{f"val_{k}": v for k, v in final_storm_metrics['csi_by_threshold'].items()},
                            **{f"val_{k}": v for k, v in final_storm_metrics['hss_by_threshold'].items()},
                            "val_b_mse": final_storm_metrics['b_mse'],
-                           "val_mse": final_mse,
+                           "val_mse": final_storm_metrics['mse'],
                            **{f"val_{k}": v for k, v in final_mse_by_range.items()}})
             
-            # Store metrics for potential saving
             run_epoch.validation_metrics = {
                 "b_mse": final_storm_metrics['b_mse'],
-                "mse": final_mse,
+                "mse": final_storm_metrics['mse'],
                 "csi_by_threshold": final_storm_metrics['csi_by_threshold'],
                 "hss_by_threshold": final_storm_metrics['hss_by_threshold'],
+                "confusion_by_threshold": final_storm_metrics['confusion_by_threshold'],
                 "mse_by_range": final_mse_by_range
             }
         
@@ -369,17 +327,22 @@ def train_radar_model(
                 import json
                 results_dir = save_dir / "results"
                 results_dir.mkdir(exist_ok=True)
+                vm = run_epoch.validation_metrics
                 metrics_to_save = {
-                    "epoch": ep,
-                    "val_loss": vl,
-                    **run_epoch.validation_metrics
+                    "epoch": int(ep),
+                    "val_loss": float(vl),
+                    "b_mse": float(vm.get("b_mse", float("nan"))),
+                    "mse": float(vm.get("mse", float("nan"))),
+                    "csi_by_threshold": {k: float(v) for k, v in vm.get("csi_by_threshold", {}).items()},
+                    "hss_by_threshold": {k: float(v) for k, v in vm.get("hss_by_threshold", {}).items()},
+                    "confusion_by_threshold": {k: {kk: int(vv) for kk, vv in d.items()} for k, d in vm.get("confusion_by_threshold", {}).items()},
+                    "mse_by_range": {k: (float(v) if v is not None and not np.isnan(v) else None) for k, v in vm.get("mse_by_range", {}).items()},
                 }
                 with open(results_dir / "best_validation_metrics.json", "w") as f:
                     json.dump(metrics_to_save, f, indent=2)
                 print(f"Validation metrics saved to {results_dir}/best_validation_metrics.json")
         else:
             epochs_since_improvement += 1
-        # Only apply early stopping if patience > 0
         if early_stopping_patience > 0 and epochs_since_improvement >= early_stopping_patience:
             print(f"Early stopping: validation loss did not improve for {epochs_since_improvement} epochs.")
             break
@@ -445,14 +408,12 @@ def predict_test_set(
     stats   = np.load(run_dir/"minmax_stats.npz")
     maxv    = float(stats['maxv']); eps=1e-6
     
-    # Determine where to save predictions
     if predictions_dir is None:
         predictions_dir = run_dir
     else:
         predictions_dir = Path(predictions_dir)
         predictions_dir.mkdir(parents=True, exist_ok=True)
 
-    # Use memory-mapped loading for large datasets
     cube = np.load(npy_path, mmap_mode='r')
     T, C, H, W = cube.shape
     if not (isinstance(train_val_test_split, (tuple, list)) and len(train_val_test_split) == 3):
@@ -468,7 +429,7 @@ def predict_test_set(
     test_ds  = Subset(ds, idx_test)
     dl      = DataLoader(test_ds, batch_size, shuffle=False)
 
-    model = CNN3D(in_ch=C, hidden_dims=hidden_dims, kernel=kernel_size, seq_len_in=seq_len_in)
+    model = CNN3D(in_ch=C, hidden_dims=hidden_dims, kernel=kernel_size)
     st = torch.load(ckpt, map_location=device)
     if isinstance(st, dict) and 'model' in st:
         st=st['model']
@@ -488,15 +449,24 @@ def predict_test_set(
     mse_sums = {f"mse_{r_min}_{r_max}": 0.0 for r_min, r_max in ranges}
     mse_counts = {f"mse_{r_min}_{r_max}": 0 for r_min, r_max in ranges}
 
+    metrics_accumulator = init_forecasting_metrics_accumulator()
+
     idx = 0
     with torch.no_grad():
         for xb, yb in tqdm(dl, desc='Testing', total=len(dl)):
             xb = xb.to(device)
-            out_n = model(xb).cpu().numpy()  # (B, C, H, W)
-            yb_np = yb.numpy()  # (B, C, H, W)
-            out_n_dBZ = out_n * (maxv+eps)
+            out_n = model(xb) 
+            yb_tensor = yb.to(device) 
+            
+            metrics_accumulator = accumulate_forecasting_metrics_batch(
+                metrics_accumulator, out_n.detach(), yb_tensor.detach(), maxv=maxv, eps=eps
+            )
+            
+            out_n_np = out_n.cpu().numpy() 
+            yb_np = yb.numpy()  
+            out_n_dBZ = out_n_np * (maxv+eps)
             yb_dBZ = yb_np * (maxv+eps)
-            batch_size = out_n.shape[0]
+            batch_size = out_n_np.shape[0]
             if save_arrays:
                 preds_memmap[idx:idx+batch_size] = out_n_dBZ
                 gts_memmap[idx:idx+batch_size] = yb_dBZ
@@ -513,7 +483,6 @@ def predict_test_set(
     if save_arrays:
         preds_memmap.flush()
         gts_memmap.flush()
-        # Save shape and dtype metadata for memmap arrays
         meta = {
             'shape': (N, C, H, W),
             'dtype': 'float32'
@@ -521,6 +490,7 @@ def predict_test_set(
         np.savez(predictions_dir/"test_preds_dBZ_meta.npz", **meta)
         np.savez(predictions_dir/"test_targets_dBZ_meta.npz", **meta)
 
+    global_metrics = compute_final_forecasting_metrics(metrics_accumulator)
 
     mse_by_range = {}
     for r_min, r_max in ranges:
@@ -537,13 +507,31 @@ def predict_test_set(
     import json
     with open(results_dir / "test_mse_by_ranges.json", "w") as f:
         json.dump(mse_by_range, f, indent=2)
+
+    final_metrics = {
+        "b_mse": float(global_metrics['b_mse']),
+        "mse": float(global_metrics['mse']),
+        "csi_by_threshold": {k: float(v) for k, v in global_metrics['csi_by_threshold'].items()},
+        "hss_by_threshold": {k: float(v) for k, v in global_metrics['hss_by_threshold'].items()},
+        "confusion_by_threshold": {k: {kk: int(vv) for kk, vv in v.items()} for k, v in global_metrics['confusion_by_threshold'].items()},
+        "mse_by_range": {k: float(v) if not np.isnan(v) else None for k, v in mse_by_range.items()},
+    }
+    with open(results_dir / "test_metrics.json", "w") as f:
+        json.dump(final_metrics, f, indent=2)
     
     print("MSE by reflectivity range:")
     for range_name, mse in mse_by_range.items():
         print(f"{range_name}: {mse:.4f}")
+    print("Test metrics:")
+    print(f"  B-MSE: {final_metrics['b_mse']:.4f}")
+    print(f"  MSE: {final_metrics['mse']:.4f}")
+    for th, csi in final_metrics["csi_by_threshold"].items():
+        print(f"  CSI {th}: {csi:.4f}")
+    for th, hss in final_metrics["hss_by_threshold"].items():
+        print(f"  HSS {th}: {hss:.4f}")
     if save_arrays:
         print(f"Saved test_preds_dBZ.npy + test_targets_dBZ.npy → {predictions_dir}")
-        print(f"Saved test_mse_by_ranges.json → {results_dir}")
+        print(f"Saved test_mse_by_ranges.json and test_metrics.json → {results_dir}")
     return None
 
 
@@ -588,13 +576,12 @@ if __name__ == "__main__":
     test_parser.add_argument("--kernel_size", type=int, default=3, help="Kernel size (default: 3)")
     test_parser.add_argument("--which", type=str, default="best", help="Which checkpoint to load: 'best' or 'latest'")
     test_parser.add_argument("--device", type=str, default=None, help="Device to run inference on (default: 'cpu')")
-    test_parser.add_argument("--save_arrays", type=bool, default=True, help="Whether to save predictions and targets as .npy files")
+    test_parser.add_argument("--save_arrays", type=str, default="True", help="Whether to save predictions and targets as .npy files (True/False)")
     test_parser.add_argument("--predictions_dir", type=str, default=None, help="Directory to save large prediction/target files (default: same as run_dir)")
 
     args = parser.parse_args()
 
     if args.command == "train":
-        # Convert use_patches string to boolean
         if isinstance(args.use_patches, str):
             if args.use_patches.lower() in ["true", "1", "yes"]:
                 args.use_patches = True
@@ -611,7 +598,6 @@ if __name__ == "__main__":
         if args.kernel_size % 2 == 0:
             raise ValueError("kernel_size must be an odd integer.")
         train_val_test_split = ast.literal_eval(args.train_val_test_split)
-        # Save arguments to save_dir/train_args.json
         import json, os
         os.makedirs(args.save_dir, exist_ok=True)
         with open(os.path.join(args.save_dir, "train_args.json"), "w") as f:
@@ -648,7 +634,13 @@ if __name__ == "__main__":
         except Exception:
             raise ValueError("hidden_dims must be a tuple or list, like (64,64) or [64,64]")
         train_val_test_split = ast.literal_eval(args.train_val_test_split)
-        # Save arguments to run_dir/test_args.json
+        if isinstance(args.save_arrays, str):
+            if args.save_arrays.lower() in ["true", "1", "yes"]:
+                args.save_arrays = True
+            elif args.save_arrays.lower() in ["false", "0", "no"]:
+                args.save_arrays = False
+            else:
+                raise ValueError("--save_arrays must be True or False")
         import json, os
         os.makedirs(args.run_dir, exist_ok=True)
         with open(os.path.join(args.run_dir, "test_args.json"), "w") as f:
