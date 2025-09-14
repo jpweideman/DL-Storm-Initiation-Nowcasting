@@ -143,4 +143,4 @@ Forecasting evaluation metrics are computed at two stages with different data re
 #### Storms with Displacement (Accounting for Wind)
 ![Storm Animation with Wind](storm_with_wind.gif)
 
-<small>Note: The visualization above show storms in Cartesian coordinates for clarity, but it does not address an issue: storms moving over the radar center (crossing the 0°/360° azimuth boundary). In the actual implementation, we use an azimuth wrapping approach to handle this circular coordinate system properly to ensure accurate storm tracking also when a storm moves over the center of the radar.</small>
+<sup>Note: The visualization above show storms in Cartesian coordinates for clarity, but it does not address an issue: storms moving over the radar center (crossing the 0°/360° azimuth boundary). In the actual implementation, we use an azimuth wrapping approach to handle this circular coordinate system properly to ensure accurate storm tracking also when a storm moves over the center of the radar.</sup>
