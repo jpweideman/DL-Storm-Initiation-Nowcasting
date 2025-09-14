@@ -56,6 +56,7 @@ python src/training/train_unet_3D_cnn.py test \
   --predictions_dir predictions/unet3dcnn_example
 ```
 
+- Test metrics (CSI, HSS, B-MSE, MSE by dBZ bins, confusion matrices) are automatically computed and saved to `results/test_metrics.json` in the run directory.
 - For large datasets, it is possible to use the `--predictions_dir` argument to save prediction and target arrays in a separate directory (outside the run directory). 
 This is useful if one wants to save the large output files to an external storage location.
 - **Note**: The testing function returns arrays of **Composite Reflectivity (maximum reflectivity projection over altitudes)**. If your model outputs have multiple channels (e.g., different altitude levels), the testing function automatically reduces them to composite reflectivity.
@@ -96,6 +97,7 @@ Patch-based training is highly recommended for radar nowcasting of storm initiat
 - **Arguments**: Saved as `{train/test}_args.json` in the run directory.
 - **Results**: Results saved in `results/` inside the run directory.
 - **Validation Metrics**: Automatically saved to `results/best_validation_metrics.json` when new best validation scores are achieved.
+- **Test Metrics**: Automatically saved to `results/test_metrics.json` when running the test command. Contains comprehensive evaluation metrics including CSI, HSS, B-MSE, MSE by dBZ bins, and confusion matrices for all thresholds.
 - **Predictions**: Large data arrays from testing can be saved in a separate directory using `--predictions_dir`.
 
 See the main [README.md](../../README.md) for the full pipeline. 
