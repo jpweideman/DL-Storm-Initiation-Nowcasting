@@ -6,7 +6,7 @@ from skimage.measure import find_contours
 from matplotlib.path import Path
 from matplotlib.colors import Normalize
 import matplotlib.patches as mpatches
-from src.utils.storm_utils import detect_storms, compute_polar_pixel_areas, detect_new_storm_formations, compute_displacement_vectors, predict_storm_positions
+from src.utils.storm_utils import detect_storms, compute_polar_pixel_areas, detect_new_storm_formations, predict_storm_positions
 
 def animate_storms(data, reflectivity_threshold=45, area_threshold_km2=10.0, dilation_iterations=5, interval=100):
     """
@@ -481,4 +481,4 @@ def animate_new_storms_with_wind(data, reflectivity_threshold=45, area_threshold
     
     plt.close(fig)
     ani = animation.FuncAnimation(fig, update, frames=data.shape[0], interval=interval)
-    return ani 
+    return ani
