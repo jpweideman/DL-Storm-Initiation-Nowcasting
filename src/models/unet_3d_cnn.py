@@ -85,7 +85,7 @@ class Up3D(nn.Module):
 
 class UNet3DCNN(nn.Module):
     """
-    U-Net 3D CNN for spatiotemporal forecasting.
+    U-Net 3D CNN model.
 
     Parameters
     ----------

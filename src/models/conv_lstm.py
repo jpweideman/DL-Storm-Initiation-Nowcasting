@@ -4,7 +4,7 @@ import torch.nn as nn
 
 class ConvLSTMCell(nn.Module):
     """
-    ConvLSTM Cell for spatiotemporal forecasting.
+    ConvLSTM Cell.
 
     Parameters
     ----------
@@ -38,7 +38,7 @@ class ConvLSTMCell(nn.Module):
     
 class ConvLSTM(nn.Module):
     """
-    ConvLSTM model for spatiotemporal forecasting.
+    ConvLSTM model.
 
     Parameters
     ----------

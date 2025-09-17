@@ -6,7 +6,7 @@ from src.models.traj_gru_enc_dec import TrajGRUCell
 
 class TrajGRU(nn.Module):
     """
-    TrajGRU model for spatiotemporal forecasting.
+    TrajGRU model.
 
     Parameters
     ----------

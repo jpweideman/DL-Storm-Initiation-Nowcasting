@@ -125,7 +125,7 @@ class Up(nn.Module):
 
 class UNetTrajGRU(nn.Module):
     """
-    U-Net + Double TrajGRU model for spatiotemporal forecasting.
+    U-Net + Double TrajGRU model.
     
     Parameters
     ----------

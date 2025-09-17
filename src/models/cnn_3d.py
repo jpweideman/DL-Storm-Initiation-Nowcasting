@@ -28,7 +28,7 @@ def conv3d_block(in_ch, out_ch, kernel_size=3, stride=1, padding=1):
 
 class CNN3D(nn.Module):
     """
-    3D CNN for spatiotemporal forecasting.
+    3D CNN model.
 
     Parameters
     ----------

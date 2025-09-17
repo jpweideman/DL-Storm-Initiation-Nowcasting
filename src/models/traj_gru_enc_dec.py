@@ -282,7 +282,7 @@ class TrajGRUForecaster(nn.Module):
 
 class TrajGRUEncoderDecoder(nn.Module):
     """
-    TrajGRU Encoder–Decoder model (encoder–forecaster) spatiotemporal forecasting.
+    TrajGRU Encoder–Decoder model.
 
     Parameters
     ----------

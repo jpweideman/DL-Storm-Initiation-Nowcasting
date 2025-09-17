@@ -86,7 +86,7 @@ class Up(nn.Module):
 
 class ConvLSTMCell(nn.Module):
     """
-    ConvLSTM Cell for spatiotemporal processing.
+    ConvLSTM Cell.
 
     Parameters
     ----------
@@ -122,7 +122,7 @@ class ConvLSTMCell(nn.Module):
 
 class UNetConvLSTM(nn.Module):
     """
-    U-Net + ConvLSTM model for spatiotemporal forecasting.
+    U-Net + ConvLSTM model.
 
     Parameters
     ----------
